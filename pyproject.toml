@@ -25,7 +25,9 @@ classifiers = [
 dependencies = [
   "anndata",
   # for debug logging (referenced from the issue template)
+  "cyclopts>=3.16.1",
   "geopandas>=1.0.1",
+  "imagesize>=1.4.1",
   "ipykernel>=6.29.5",
   "mercantile>=1.2.1",
   "pillow>=11.2.1",
