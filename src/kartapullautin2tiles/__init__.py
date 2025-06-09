@@ -7,9 +7,10 @@ import imagesize
 import mercantile
 import numpy as np
 import pyproj
-import rasterio
+import rasterio.merge
 from PIL import Image
 from shapely.geometry import Polygon
+from tqdm import tqdm
 
 __version__ = version("kartapullautin2tiles")
 
@@ -69,20 +70,26 @@ def _get_tile_bb(tile: mercantile.Tile, crs: str):
     transformer = pyproj.Transformer.from_crs("EPSG:4326", crs, always_xy=True)
     minx, miny = transformer.transform(*tile_wgs84_bounds[:2])
     maxx, maxy = transformer.transform(*tile_wgs84_bounds[2:])
-    return Polygon.from_bounds(minx, miny, maxx, maxy)
+    return (minx, miny, maxx, maxy)
 
 
-def stitch_tile(gpdf, tile, *, tile_size=256) -> Image.Image:
-    query_polygon = _get_tile_bb(gpdf, tile)
-    tmp_df = gpdf.intersects(query_polygon)
+def stitch_tile(gpdf: gpd.GeoDataFrame, tile: mercantile.Tile, *, tile_size: int = 256) -> Image.Image:
+    """
+    Create a single Mercator tile from one or multiple kartapullautin tiles
+
+    (there's no guarantee that a tile is always fully contained in one kartapullautin tile, especially
+    on lower zoom levels.)
+    """
+    query_polygon = _get_tile_bb(tile, str(gpdf.crs))
+    tmp_df = gpdf.loc[gpdf.intersects(Polygon.from_bounds(*query_polygon))].reset_index()
     if tmp_df.empty:
         print("No intersecting tiles found. Displaying a blank image.")
         return Image.new("RGB", (tile_size, tile_size), color="white")
     else:
-        query_bounds = tmp_df.bounds
-        mosaic_array, mosaic_transform = rasterio.merge.merge(
+        # query_bounds = tuple(tmp_df.total_bounds)
+        mosaic_array, _ = rasterio.merge.merge(
             tmp_df["img_file"],
-            bounds=query_bounds,
+            bounds=query_polygon,
             nodata=255,  # Use 0 as the nodata value for areas not covered
             dtype=np.uint8,  # Assuming 8-bit PNGs; adjust if necessary
         )
@@ -109,7 +116,7 @@ def stitch_tile(gpdf, tile, *, tile_size=256) -> Image.Image:
         return pil_image.resize((tile_size, tile_size), Image.Resampling.LANCZOS)
 
 
-def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom=7, max_zoom=18):
+def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max_zoom: int = 18):
     """
     Create a tile directory
 
@@ -126,7 +133,7 @@ def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom=7, max_zoom=18
     west_lon, south_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[:2])
     east_lon, north_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[2:])
 
-    for tile in mercantile.tiles(west_lon, south_lat, east_lon, north_lat, zooms=range(min_zoom, max_zoom + 1)):
+    for tile in tqdm(mercantile.tiles(west_lon, south_lat, east_lon, north_lat, zooms=range(min_zoom, max_zoom + 1))):
         img = stitch_tile(gpdf, tile)
         tile_path = out_dir / str(tile.z) / str(tile.x)
         tile_path.mkdir(parents=True, exist_ok=True)

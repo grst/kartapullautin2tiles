@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenLayers Local Tiles Viewer</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@8.2.0/ol.css" type="text/css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+        .map {
+            height: 100vh;
+            width: 100vw;
+        }
+        .info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        <strong>Local Tiles Viewer</strong><br>
+        Background: OpenStreetMap<br>
+        Custom tiles: file:///home/sturm/Downloads/test_png/
+    </div>
+    <div id="map" class="map"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
+    <script>
+        // Create OpenStreetMap background layer
+        const osmLayer = new ol.layer.Tile({
+            source: new ol.source.OSM()
+        });
+
+        // Create the custom tile layer
+        const customTileLayer = new ol.layer.Tile({
+            source: new ol.source.XYZ({
+                url: 'file:///home/sturm/Downloads/test_png/{z}/{x}/{y}.png',
+                minZoom: 10,
+                maxZoom: 18,
+                tileLoadFunction: function(imageTile, src) {
+                    // Handle CORS issues for local files
+                    imageTile.getImage().src = src;
+                }
+            }),
+            opacity: 0.8 // Make custom tiles slightly transparent to see OSM underneath
+        });
+
+        // Create the map with OSM as background and custom tiles on top
+        const map = new ol.Map({
+            target: 'map',
+            layers: [
+                osmLayer,      // Background layer
+                customTileLayer // Custom tiles overlay
+            ],
+            view: new ol.View({
+                center: ol.proj.fromLonLat([10.2135, 47.5610]), // Immenstadt im Allgäu coordinates
+                zoom: 9,
+                minZoom: 1,
+                maxZoom: 18
+            })
+        });
+
+        // Add controls
+        map.addControl(new ol.control.FullScreen());
+        map.addControl(new ol.control.ScaleLine());
+        map.addControl(new ol.control.ZoomSlider());
+    </script>
+</body>
+</html>
