@@ -34,6 +34,7 @@ dependencies = [
   "pyproj>=3.7.1",
   "rasterio>=1.4.3",
   "session-info2",
+  "tqdm>=4.67.1",
 ]
 optional-dependencies.dev = [
   "pre-commit",

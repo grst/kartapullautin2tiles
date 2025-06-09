@@ -937,6 +937,7 @@ dependencies = [
     { name = "pyproj" },
     { name = "rasterio" },
     { name = "session-info2" },
+    { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
@@ -995,6 +996,7 @@ requires-dist = [
     { name = "sphinx-tabs", marker = "extra == 'doc'" },
     { name = "sphinxcontrib-bibtex", marker = "extra == 'doc'", specifier = ">=1" },
     { name = "sphinxext-opengraph", marker = "extra == 'doc'" },
+    { name = "tqdm", specifier = ">=4.67.1" },
     { name = "twine", marker = "extra == 'dev'", specifier = ">=4.0.2" },
 ]
 provides-extras = ["dev", "doc", "test"]
@@ -2651,6 +2653,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/71/ed/fe27371e79930559e9a90324727267ad5cf9479a2c897ff75ace1d3bec3d/tornado-6.5-cp39-abi3-win32.whl", hash = "sha256:fd20c816e31be1bbff1f7681f970bbbd0bb241c364220140228ba24242bcdc59", size = 443674, upload-time = "2025-05-15T20:37:37.617Z" },
     { url = "https://files.pythonhosted.org/packages/78/77/85fb3a93ef109f6de9a60acc6302f9761a3e7150a6c1b40e8a4a215db5fc/tornado-6.5-cp39-abi3-win_amd64.whl", hash = "sha256:007f036f7b661e899bd9ef3fa5f87eb2cb4d1b2e7d67368e778e140a2f101a7a", size = 444118, upload-time = "2025-05-15T20:37:39.174Z" },
     { url = "https://files.pythonhosted.org/packages/54/9a/3cc3969c733ddd4f5992b3d4ec15c9a2564192c7b1a239ba21c8f73f8af4/tornado-6.5-cp39-abi3-win_arm64.whl", hash = "sha256:542e380658dcec911215c4820654662810c06ad872eefe10def6a5e9b20e9633", size = 442874, upload-time = "2025-05-15T20:37:41.267Z" },
+]
+
+[[package]]
+name = "tqdm"
+version = "4.67.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737, upload-time = "2024-11-24T20:12:22.481Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d0/30/dc54f88dd4a2b5dc8a0279bdd7270e735851848b762aeb1c1184ed1f6b14/tqdm-4.67.1-py3-none-any.whl", hash = "sha256:26445eca388f82e72884e0d580d5464cd801a3ea01e63e5601bdff9ba6a48de2", size = 78540, upload-time = "2024-11-24T20:12:19.698Z" },
 ]
 
 [[package]]

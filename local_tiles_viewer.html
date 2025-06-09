@@ -27,6 +27,17 @@
             z-index: 1000;
             font-size: 14px;
         }
+        button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            padding: 10px;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -36,6 +47,7 @@
         Custom tiles: file:///home/sturm/Downloads/test_png/
     </div>
     <div id="map" class="map"></div>
+    <button id="toggleGrid">Toggle Grid</button>
 
     <script src="https://cdn.jsdelivr.net/npm/ol@8.2.0/dist/ol.js"></script>
     <script>
@@ -58,12 +70,21 @@
             opacity: 0.8 // Make custom tiles slightly transparent to see OSM underneath
         });
 
+        // Create debug tile layer to show tile boundaries
+        const debugLayer = new ol.layer.Tile({
+            source: new ol.source.TileDebug({
+                tileGrid: customTileLayer.getSource().getTileGrid()
+            }),
+            visible: true // You can toggle this
+        });
+
         // Create the map with OSM as background and custom tiles on top
         const map = new ol.Map({
             target: 'map',
             layers: [
                 osmLayer,      // Background layer
-                customTileLayer // Custom tiles overlay
+                customTileLayer, // Custom tiles overlay
+                debugLayer     // Debug grid showing tile boundaries
             ],
             view: new ol.View({
                 center: ol.proj.fromLonLat([10.2135, 47.5610]), // Immenstadt im Allgäu coordinates
@@ -77,6 +98,11 @@
         map.addControl(new ol.control.FullScreen());
         map.addControl(new ol.control.ScaleLine());
         map.addControl(new ol.control.ZoomSlider());
+
+        // Toggle debug grid visibility
+        document.getElementById('toggleGrid').addEventListener('click', function() {
+            debugLayer.setVisible(!debugLayer.getVisible());
+        });
     </script>
 </body>
 </html>
