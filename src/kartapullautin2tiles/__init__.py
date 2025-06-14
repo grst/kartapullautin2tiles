@@ -127,6 +127,10 @@ def _subset_array(
     right_col = min(array.shape[-1], int(np.ceil(right_col)))
     bottom_row = min(array.shape[-2], int(np.ceil(bottom_row)))
 
+    # Check if we have valid dimensions
+    if left_col >= right_col or top_row >= bottom_row:
+        raise ValueError("Tile does not overlap with input array")
+
     subset_array = array[:, top_row:bottom_row, left_col:right_col]
 
     # Create transform for the subset
@@ -166,24 +170,27 @@ def extract_and_transform_tile(
     # Get tile bounds in WGS84
     tile_wgs84_bounds = mercantile.bounds(tile)
 
-    subset_array, subset_transform = _subset_array(array, transform, array_crs=src_crs, tile=tile)
-
-    # Create a transform for the destination tile
-    dst_transform = from_bounds(*tile_wgs84_bounds, tile_size, tile_size)
-
-    # Create destination array for RGB
+    # Create empty tile
     dst_array = np.zeros((3, tile_size, tile_size), dtype=array.dtype)
 
-    # Reproject the subset data
-    rasterio.warp.reproject(
-        source=subset_array,
-        destination=dst_array,
-        src_transform=subset_transform,
-        src_crs=src_crs,
-        dst_transform=dst_transform,
-        dst_crs=WGS_84_CRS,
-        resampling=rasterio.warp.Resampling.lanczos,
-    )
+    try:
+        subset_array, subset_transform = _subset_array(array, transform, array_crs=src_crs, tile=tile)
+
+        # Create a transform for the destination tile
+        dst_transform = from_bounds(*tile_wgs84_bounds, tile_size, tile_size)
+
+        # Reproject the subset data
+        rasterio.warp.reproject(
+            source=subset_array,
+            destination=dst_array,
+            src_transform=subset_transform,
+            src_crs=src_crs,
+            dst_transform=dst_transform,
+            dst_crs=WGS_84_CRS,
+            resampling=rasterio.warp.Resampling.lanczos,
+        )
+    except ValueError:
+        pass
 
     image_data = np.transpose(dst_array, (1, 2, 0))
     # Create PIL image
