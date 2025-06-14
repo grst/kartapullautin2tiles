@@ -1,4 +1,7 @@
+import importlib.resources
 import logging
+import sys
+from collections.abc import Sequence
 from functools import lru_cache
 from importlib.metadata import version
 from pathlib import Path
@@ -19,7 +22,7 @@ from tqdm import tqdm
 
 __version__ = version("kartapullautin2tiles")
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
 WGS_84_CRS = "EPSG:4326"
@@ -56,7 +59,25 @@ def _load_img(pgw_file: Path):
     return {"id": pgw_file.stem, "pgw_file": pgw_file, "img_file": img_file, "geometry": tile_polygon}
 
 
-def load_kartapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", pattern="*depr*.pgw"):
+def _get_tiles_center(tiles: Sequence[mercantile.Tile]) -> tuple[float, float] | None:
+    """Get the center of a set of tiles in Lng/Lat coordinates (web mercator projection)"""
+    bboxes = [mercantile.bounds(t) for t in tiles]
+
+    if not bboxes:
+        return None
+
+    min_x = min(bbox.west for bbox in bboxes)
+    max_x = max(bbox.east for bbox in bboxes)
+    min_y = min(bbox.south for bbox in bboxes)
+    max_y = max(bbox.north for bbox in bboxes)
+
+    center_x = (min_x + max_x) / 2
+    center_y = (min_y + max_y) / 2
+
+    return center_x, center_y
+
+
+def load_kartapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", pattern="*depr*.pgw") -> gpd.GeoDataFrame:
     """
     Load coordinates from pgw files into a GeoPandas data frame
 
@@ -209,30 +230,77 @@ def extract_and_transform_tile(
     return pil_image
 
 
-def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max_zoom: int = 17):
+def list_tiles(dir: Path, *, proj: str = "EPSG:25832", pattern="*depr*.pgw", min_zoom: int = 12):
     """
-    Create a tile directory
+    List the tiles that are covered by the kartapullautin directory at the given zoom level.
+
+    Use this as a list of tiles that can be passed to make_tiles.
 
     Parameters
     ----------
-    gpdf
-        GeoPandas DataFrame
-    out_dir
-        output directory for tiles (z/x/y folder structure)
+    dir
+        Input directory (kartapullautin output dir)
+    proj
+        EPSG string of the projection used
+    pattern
+        Search pattern for the pgw files
+    min_zoom
+        Zoom level to generate tiles for
+
+    Returns
+    -------
+    Generator of tiles that cover the bounding box of all images in the directory
     """
-    assert gpdf.crs is not None
+    gpdf = load_kartapullautin_dir(dir, proj=proj, pattern=pattern)
+
     transformer_to_wgs84 = pyproj.Transformer.from_crs(gpdf.crs, WGS_84_CRS, always_xy=True)
 
     if not gpdf.shape[0]:
-        logging.info("No tiles found. Exiting")
-        return
+        logging.info("No tiles found.")
+        return []
 
     # overall bounding box in EPSG:4326
     west_lon, south_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[:2])
     east_lon, north_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[2:])
 
+    return mercantile.tiles(west_lon, south_lat, east_lon, north_lat, zooms=[min_zoom])
+
+
+def make_tiles(
+    in_dir: Path,
+    out_dir: Path,
+    tiles: Sequence[mercantile.Tile],
+    *,
+    proj: str = "EPSG:25832",
+    pattern="*depr*.pgw",
+    max_zoom: int = 17,
+):
+    """
+    Create a tile directory from kartapullautin output.
+
+    Note that all images required for a tile at min_zoom need to fit in memory. If you have
+    memory issues, consider setting a higher zoom level.
+
+    Parameters
+    ----------
+    in_dir
+        Input directory containing kartapullautin output files
+    out_dir
+        Output directory for tiles (z/x/y folder structure)
+    tiles
+        Sequence of tiles to process at the minimum zoom level
+    proj
+        EPSG string of the projection used by input images
+    pattern
+        Search pattern for pgw files in the input directory
+    max_zoom
+        Maximum zoom level to generate tiles for
+    """
+    gpdf = load_kartapullautin_dir(in_dir, proj=proj, pattern=pattern)
+    assert gpdf.crs is not None
+
     # iterate over min zoom tiles
-    for parent_tile in mercantile.tiles(west_lon, south_lat, east_lon, north_lat, zooms=[min_zoom]):
+    for parent_tile in tiles:
         logger.info(f"Working on {parent_tile}")
         query_polygon = _get_tile_bb(parent_tile, gpdf.crs)
         tmp_df = gpdf.loc[gpdf.intersects(Polygon.from_bounds(*query_polygon))].reset_index()
@@ -244,10 +312,36 @@ def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max
         img_array, img_transform = rasterio.merge.merge(
             tmp_df["img_file"], bounds=tuple(gpdf.total_bounds), nodata=255, dtype=np.uint8
         )
-        for zoom in range(min_zoom + 1, max_zoom + 1):
+        for zoom in range(parent_tile.z + 1, max_zoom + 1):
             for tile in mercantile.children(parent_tile, zoom=zoom):
                 img = extract_and_transform_tile(img_array, img_transform, tile, src_crs=gpdf.crs)
 
                 tile_path = out_dir / str(tile.z) / str(tile.x)
                 tile_path.mkdir(parents=True, exist_ok=True)
                 img.save(tile_path / f"{tile.y}.png")
+
+
+def get_html_viewer(lon_center: float, lat_center: float, *, default_zoom: int, min_zoom: int, max_zoom: int):
+    """
+    Output the HTML for a viewer application that can preview tiles in the same folder.
+
+    Parameters
+    ----------
+    lon_center
+        longitude coordinate of the default center of the map
+    lat_center
+        latitude coordinate of the default center of the map
+    default_zoom
+        default zoom
+    """
+    html_template = (importlib.resources.files("kartapullautin2tiles.assets") / "local_tiles_viewer.html").read_text(
+        "utf-8"
+    )
+
+    html = html_template.replace("{{lon_center}}", str(lon_center))
+    html = html.replace("{{lat_center}}", str(lat_center))
+    html = html.replace("{{default_zoom}}", str(default_zoom))
+    html = html.replace("{{min_zoom}}", str(min_zoom))
+    html = html.replace("{{max_zoom}}", str(max_zoom))
+
+    return html

@@ -44,7 +44,7 @@
     <div class="info">
         <strong>Local Tiles Viewer</strong><br>
         Background: OpenStreetMap<br>
-        Custom tiles: file:///home/sturm/Downloads/test_png/
+        Custom tiles: Kartapullautin
     </div>
     <div id="map" class="map"></div>
     <button id="toggleGrid">Toggle Grid</button>
@@ -59,8 +59,8 @@
         // Create the custom tile layer
         const customTileLayer = new ol.layer.Tile({
             source: new ol.source.XYZ({
-                url: 'file:///home/sturm/Downloads/test_png/{z}/{x}/{y}.png',
-                minZoom: 10,
+                url: '{z}/{x}/{y}.png',
+                minZoom: {{min_zoom}},
                 maxZoom: 18,
                 tileLoadFunction: function(imageTile, src) {
                     // Handle CORS issues for local files
@@ -87,8 +87,8 @@
                 debugLayer     // Debug grid showing tile boundaries
             ],
             view: new ol.View({
-                center: ol.proj.fromLonLat([10.2135, 47.5610]), // Immenstadt im Allgäu coordinates
-                zoom: 9,
+                center: ol.proj.fromLonLat([{{lon_center}}, {{lat_center}}]),
+                zoom: {{default_zoom}},
                 minZoom: 1,
                 maxZoom: 18
             })

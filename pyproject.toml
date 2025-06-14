@@ -8,12 +8,8 @@ version = "0.0.1"
 description = "Convert the output of kartapullautin into web mercator tiles"
 readme = "README.md"
 license = { file = "LICENSE" }
-maintainers = [
-  { name = "Gregor Sturm", email = "gregor@sturmcloud.org" },
-]
-authors = [
-  { name = "Gregor Sturm" },
-]
+maintainers = [ { name = "Gregor Sturm", email = "gregor@sturmcloud.org" } ]
+authors = [ { name = "Gregor Sturm" } ]
 requires-python = ">=3.10"
 classifiers = [
   "Programming Language :: Python :: 3 :: Only",
@@ -37,10 +33,8 @@ dependencies = [
   "session-info2",
   "tqdm>=4.67.1",
 ]
-optional-dependencies.dev = [
-  "pre-commit",
-  "twine>=4.0.2",
-]
+
+optional-dependencies.dev = [ "pre-commit", "twine>=4.0.2" ]
 optional-dependencies.doc = [
   "docutils>=0.8,!=0.18.*,!=0.19.*",
   "ipykernel",
@@ -57,14 +51,13 @@ optional-dependencies.doc = [
   "sphinxcontrib-bibtex>=1",
   "sphinxext-opengraph",
 ]
-optional-dependencies.test = [
-  "coverage",
-  "pytest",
-]
+optional-dependencies.test = [ "coverage", "pytest" ]
 # https://docs.pypi.org/project_metadata/#project-urls
 urls.Documentation = "https://kartapullautin2tiles.readthedocs.io/"
 urls.Homepage = "https://github.com/grst/kartapullautin2tiles"
 urls.Source = "https://github.com/grst/kartapullautin2tiles"
+
+scripts.k2t = "kartapullautin2tiles.cli:app"
 
 [tool.hatch.envs.default]
 installer = "uv"
@@ -93,7 +86,9 @@ features = [ "test" ]
 # If the matrix variable `deps` is set to "pre",
 # set the environment variable `UV_PRERELEASE` to "allow".
 matrix.deps.env-vars = [
-  { key = "UV_PRERELEASE", value = "allow", if = [ "pre" ] },
+  { key = "UV_PRERELEASE", value = "allow", if = [
+    "pre",
+  ] },
 ]
 
 [tool.ruff]
@@ -145,9 +140,7 @@ addopts = [
 
 [tool.coverage.run]
 source = [ "kartapullautin2tiles" ]
-omit = [
-  "**/test_*.py",
-]
+omit = [ "**/test_*.py" ]
 
 [tool.cruft]
 skip = [
