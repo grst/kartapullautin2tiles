@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 from importlib.metadata import version
 from pathlib import Path
@@ -8,11 +9,20 @@ import mercantile
 import numpy as np
 import pyproj
 import rasterio.merge
+import rasterio.transform
+import rasterio.warp
 from PIL import Image
+from pyproj.crs.crs import CRS
+from rasterio.transform import from_bounds
 from shapely.geometry import Polygon
 from tqdm import tqdm
 
 __version__ = version("kartapullautin2tiles")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+WGS_84_CRS = "EPSG:4326"
 
 
 def _load_img(pgw_file: Path):
@@ -46,7 +56,7 @@ def _load_img(pgw_file: Path):
     return {"id": pgw_file.stem, "pgw_file": pgw_file, "img_file": img_file, "geometry": tile_polygon}
 
 
-def load_kartapullautin_dir(dir: Path, *, proj="EPSG:25832", pattern="*depr*.pgw"):
+def load_kartapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", pattern="*depr*.pgw"):
     """
     Load coordinates from pgw files into a GeoPandas data frame
 
@@ -62,7 +72,7 @@ def load_kartapullautin_dir(dir: Path, *, proj="EPSG:25832", pattern="*depr*.pgw
     return gpd.GeoDataFrame((_load_img(f) for f in dir.glob(pattern)), crs=proj)
 
 
-def _get_tile_bb(tile: mercantile.Tile, crs: str):
+def _get_tile_bb(tile: mercantile.Tile, crs: str | CRS):
     """Get rows from the dataframe that overlap with tile"""
     tile_wgs84_bounds = mercantile.bounds(tile)  # Get the WGS84 bounds of the selected web mercator tile
 
@@ -73,50 +83,116 @@ def _get_tile_bb(tile: mercantile.Tile, crs: str):
     return (minx, miny, maxx, maxy)
 
 
-def stitch_tile(gpdf: gpd.GeoDataFrame, tile: mercantile.Tile, *, tile_size: int = 256) -> Image.Image:
+def _subset_array(
+    array: np.ndarray, transform: rasterio.Affine, *, array_crs: str | CRS, tile: mercantile.Tile
+) -> tuple[np.ndarray, rasterio.Affine]:
     """
-    Create a single Mercator tile from one or multiple kartapullautin tiles
+    Subset a merged image array to (approximately) the area of the tile of interest.
 
-    (there's no guarantee that a tile is always fully contained in one kartapullautin tile, especially
-    on lower zoom levels.)
+    This is done for increased performance of rasterio.warp.reproject.
+
+    Parameters
+    ----------
+    array
+        merge image; output of rasterio.merge.merge
+    array_crs
+        The CRS used by the image in `array`
+    tile
+        The tile of interest
     """
-    query_polygon = _get_tile_bb(tile, str(gpdf.crs))
-    tmp_df = gpdf.loc[gpdf.intersects(Polygon.from_bounds(*query_polygon))].reset_index()
-    if tmp_df.empty:
-        print("No intersecting tiles found. Displaying a blank image.")
-        return Image.new("RGB", (tile_size, tile_size), color="white")
-    else:
-        # query_bounds = tuple(tmp_df.total_bounds)
-        mosaic_array, _ = rasterio.merge.merge(
-            tmp_df["img_file"],
-            bounds=query_polygon,
-            nodata=255,  # Use 0 as the nodata value for areas not covered
-            dtype=np.uint8,  # Assuming 8-bit PNGs; adjust if necessary
-        )
+    tile_wgs84_bounds = mercantile.bounds(tile)
+    # Transform tile bounds to source CRS to determine subset bounds
+    transformer = pyproj.Transformer.from_crs(WGS_84_CRS, array_crs, always_xy=True)
+    src_minx, src_miny = transformer.transform(*tile_wgs84_bounds[:2])
+    src_maxx, src_maxy = transformer.transform(*tile_wgs84_bounds[2:])
 
-        # Convert the NumPy array from rasterio (bands, height, width) to a PIL Image
-        num_bands = mosaic_array.shape[0]
+    # Add some padding to ensure we capture the full tile area after reprojection
+    padding_factor = 0.1
+    width_padding = (src_maxx - src_minx) * padding_factor
+    height_padding = (src_maxy - src_miny) * padding_factor
 
-        if num_bands == 1:
-            # Grayscale image: mosaic_array is (1, H, W)
-            image_data_for_pil = mosaic_array[0]  # Get (H, W)
-            mode = "L"
-        elif num_bands == 3:
-            # RGB image: transpose from (3, H, W) to (H, W, 3)
-            image_data_for_pil = np.transpose(mosaic_array, (1, 2, 0))
-            mode = "RGB"
-        elif num_bands == 4:
-            # RGBA image: transpose from (4, H, W) to (H, W, 4)
-            image_data_for_pil = np.transpose(mosaic_array, (1, 2, 0))
-            mode = "RGBA"
-        else:
-            raise ValueError(f"Unsupported number of bands in mosaic: {num_bands}. Expected 1, 3, or 4.")
+    src_minx -= width_padding
+    src_miny -= height_padding
+    src_maxx += width_padding
+    src_maxy += height_padding
 
-        pil_image = Image.fromarray(image_data_for_pil, mode=mode)
-        return pil_image.resize((tile_size, tile_size), Image.Resampling.LANCZOS)
+    # Convert source bounds to pixel coordinates
+    inv_transform = ~transform
+    left_col, top_row = inv_transform * (src_minx, src_maxy)  # type: ignore
+    right_col, bottom_row = inv_transform * (src_maxx, src_miny)  # type: ignore
+
+    # Ensure we stay within array bounds
+    left_col = max(0, int(np.floor(left_col)))
+    top_row = max(0, int(np.floor(top_row)))
+    right_col = min(array.shape[-1], int(np.ceil(right_col)))
+    bottom_row = min(array.shape[-2], int(np.ceil(bottom_row)))
+
+    subset_array = array[:, top_row:bottom_row, left_col:right_col]
+
+    # Create transform for the subset
+    subset_transform = rasterio.transform.from_bounds(
+        src_minx, src_miny, src_maxx, src_maxy, right_col - left_col, bottom_row - top_row
+    )
+
+    return subset_array, subset_transform
 
 
-def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max_zoom: int = 18):
+def extract_and_transform_tile(
+    array: np.ndarray, transform: rasterio.Affine, tile: mercantile.Tile, *, src_crs: str | CRS, tile_size=256
+):
+    """
+    Extract the image that corresponds to a specific tile from an array and display it.
+
+    Properly reprojects the image data from the source CRS to WGS84 (Web Mercator tile CRS).
+
+    Parameters
+    ----------
+    array : numpy.ndarray
+        The merged raster array from rasterio.merge.merge()
+    transform : affine.Affine
+        The affine transform from rasterio.merge.merge()
+    tile : mercantile.Tile
+        The tile to extract
+    source_crs : str
+        The coordinate reference system of the source array (default: "EPSG:25832")
+    tile_size : int
+        Target size for the output tile (default: 256)
+
+    Returns
+    -------
+    PIL.Image.Image
+        The extracted, reprojected, and resized tile image
+    """
+    # Get tile bounds in WGS84
+    tile_wgs84_bounds = mercantile.bounds(tile)
+
+    subset_array, subset_transform = _subset_array(array, transform, array_crs=src_crs, tile=tile)
+
+    # Create a transform for the destination tile
+    dst_transform = from_bounds(*tile_wgs84_bounds, tile_size, tile_size)
+
+    # Create destination array for RGB
+    dst_array = np.zeros((3, tile_size, tile_size), dtype=array.dtype)
+
+    # Reproject the subset data
+    rasterio.warp.reproject(
+        source=subset_array,
+        destination=dst_array,
+        src_transform=subset_transform,
+        src_crs=src_crs,
+        dst_transform=dst_transform,
+        dst_crs=WGS_84_CRS,
+        resampling=rasterio.warp.Resampling.lanczos,
+    )
+
+    image_data = np.transpose(dst_array, (1, 2, 0))
+    # Create PIL image
+    pil_image = Image.fromarray(image_data.astype(np.uint8), mode="RGB")
+
+    return pil_image
+
+
+def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max_zoom: int = 17):
     """
     Create a tile directory
 
@@ -127,14 +203,30 @@ def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max
     out_dir
         output directory for tiles (z/x/y folder structure)
     """
-    transformer_to_wgs84 = pyproj.Transformer.from_crs(gpdf.crs, "EPSG:4326", always_xy=True)
+    assert gpdf.crs is not None
+    transformer_to_wgs84 = pyproj.Transformer.from_crs(gpdf.crs, WGS_84_CRS, always_xy=True)
 
     # overall bounding box in EPSG:4326
     west_lon, south_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[:2])
     east_lon, north_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[2:])
 
-    for tile in tqdm(mercantile.tiles(west_lon, south_lat, east_lon, north_lat, zooms=range(min_zoom, max_zoom + 1))):
-        img = stitch_tile(gpdf, tile)
-        tile_path = out_dir / str(tile.z) / str(tile.x)
-        tile_path.mkdir(parents=True, exist_ok=True)
-        img.save(tile_path / f"{tile.y}.png")
+    # iterate over min zoom tiles
+    for parent_tile in mercantile.tiles(west_lon, south_lat, east_lon, north_lat, zooms=[min_zoom]):
+        logger.info(f"Working on {parent_tile}")
+        query_polygon = _get_tile_bb(parent_tile, gpdf.crs)
+        tmp_df = gpdf.loc[gpdf.intersects(Polygon.from_bounds(*query_polygon))].reset_index()
+        if not tmp_df.shape[0]:
+            logger.info("Empty tile, skipping")
+            continue
+
+        # stitch tiles
+        img_array, img_transform = rasterio.merge.merge(
+            tmp_df["img_file"], bounds=tuple(gpdf.total_bounds), nodata=255, dtype=np.uint8
+        )
+        for zoom in range(min_zoom + 1, max_zoom + 1):
+            for tile in mercantile.children(parent_tile, zoom=zoom):
+                img = extract_and_transform_tile(img_array, img_transform, tile, src_crs=gpdf.crs)
+
+                tile_path = out_dir / str(tile.z) / str(tile.x)
+                tile_path.mkdir(parents=True, exist_ok=True)
+                img.save(tile_path / f"{tile.y}.png")
