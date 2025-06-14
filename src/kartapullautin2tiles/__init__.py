@@ -133,9 +133,14 @@ def _subset_array(
 
     subset_array = array[:, top_row:bottom_row, left_col:right_col]
 
-    # Create transform for the subset
+    # Calculate the actual bounds that correspond to the clipped pixel coordinates
+    # This ensures the transform matches the actual subset array dimensions
+    actual_minx, actual_maxy = transform * (left_col, top_row)  # type: ignore
+    actual_maxx, actual_miny = transform * (right_col, bottom_row)  # type: ignore
+
+    # Create transform for the subset using actual bounds
     subset_transform = rasterio.transform.from_bounds(
-        src_minx, src_miny, src_maxx, src_maxy, right_col - left_col, bottom_row - top_row
+        actual_minx, actual_miny, actual_maxx, actual_maxy, right_col - left_col, bottom_row - top_row
     )
 
     return subset_array, subset_transform
