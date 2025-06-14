@@ -1,0 +1,292 @@
+import tempfile
+from pathlib import Path
+
+import geopandas as gpd
+import mercantile
+import numpy as np
+import pytest
+import rasterio
+from PIL import Image
+from pyproj.crs.crs import CRS
+from shapely.geometry import Polygon
+
+import kartapullautin2tiles
+
+
+def test_package_has_version():
+    assert kartapullautin2tiles.__version__ is not None
+
+
+# Tests for _load_img function
+def test_load_img_with_valid_pgw(sample_pgw_file):
+    """Test loading a valid PGW file"""
+    result = kartapullautin2tiles._load_img(sample_pgw_file)
+
+    assert result["id"] == "576_5265.laz_depr"
+    assert result["pgw_file"] == sample_pgw_file
+    assert result["img_file"] == sample_pgw_file.with_suffix(".png")
+    assert isinstance(result["geometry"], Polygon)
+
+    # Check that the polygon has 5 coordinates (closed polygon)
+    coords = list(result["geometry"].exterior.coords)
+    assert len(coords) == 5
+    assert coords[0] == coords[-1]  # First and last should be the same (closed)
+
+
+def test_load_img_pgw_parsing(temp_image_files):
+    """Test that PGW file parameters are parsed correctly"""
+    result = kartapullautin2tiles._load_img(temp_image_files["pgw_file"])
+
+    # Check the geometry bounds match expected values
+    # With pixel size 1.0, -1.0 and 10x10 image starting at (100, 200)
+    bounds = result["geometry"].bounds
+    assert bounds[0] == 100.0  # minx
+    assert bounds[1] == 190.0  # miny (200 + 10 * -1.0)
+    assert bounds[2] == 110.0  # maxx (100 + 10 * 1.0)
+    assert bounds[3] == 200.0  # maxy
+
+
+# Tests for load_kartapullautin_dir function
+def test_load_kartapullautin_dir_default_params(test_data_dir):
+    """Test loading directory with default parameters"""
+    result = kartapullautin2tiles.load_kartapullautin_dir(test_data_dir)
+
+    assert isinstance(result, gpd.GeoDataFrame)
+    assert result.crs == "EPSG:25832"
+    assert len(result) == 6  # Should find 6 PGW files
+    assert all(col in result.columns for col in ["id", "pgw_file", "img_file", "geometry"])
+
+
+@pytest.mark.parametrize(
+    "proj,pattern,expected_count",
+    [
+        ("EPSG:25832", "*depr*.pgw", 6),
+        ("EPSG:4326", "*.pgw", 6),
+        (CRS.from_epsg(25832), "*depr*.pgw", 6),
+    ],
+)
+def test_load_kartapullautin_dir_params(test_data_dir, proj, pattern, expected_count):
+    """Test loading directory with different parameters"""
+    result = kartapullautin2tiles.load_kartapullautin_dir(test_data_dir, proj=proj, pattern=pattern)
+
+    assert isinstance(result, gpd.GeoDataFrame)
+    assert len(result) == expected_count
+
+    if isinstance(proj, str):
+        assert result.crs == proj
+    else:
+        assert result.crs.to_epsg() == proj.to_epsg()
+
+
+def test_load_kartapullautin_dir_empty_pattern(test_data_dir):
+    """Test loading directory with pattern that matches no files"""
+    result = kartapullautin2tiles.load_kartapullautin_dir(test_data_dir, pattern="nonexistent*.pgw")
+
+    assert isinstance(result, gpd.GeoDataFrame)
+    assert len(result) == 0
+
+
+# Tests for _get_tile_bb function
+@pytest.mark.parametrize(
+    "tile_z,tile_x,tile_y,crs",
+    [
+        (10, 500, 300, "EPSG:25832"),
+        (15, 16000, 10000, "EPSG:4326"),
+        (8, 100, 80, CRS.from_epsg(3857)),
+    ],
+)
+def test_get_tile_bb_various_tiles(tile_z, tile_x, tile_y, crs):
+    """Test getting bounding box for various tiles and CRS"""
+    tile = mercantile.Tile(tile_x, tile_y, tile_z)
+
+    result = kartapullautin2tiles._get_tile_bb(tile, crs)
+
+    assert len(result) == 4
+    minx, miny, maxx, maxy = result
+    assert minx < maxx
+    assert miny < maxy
+    assert all(isinstance(x, float) for x in result)
+
+
+def test_get_tile_bb_consistency():
+    """Test that tile bounding box is consistent with mercantile bounds"""
+    tile = mercantile.Tile(1000, 600, 12)
+    crs = "EPSG:4326"
+
+    result = kartapullautin2tiles._get_tile_bb(tile, crs)
+    original_bounds = mercantile.bounds(tile)
+
+    # For EPSG:4326, the bounds should be the same as mercantile.bounds
+    assert result[0] == pytest.approx(original_bounds.west)
+    assert result[1] == pytest.approx(original_bounds.south)
+    assert result[2] == pytest.approx(original_bounds.east)
+    assert result[3] == pytest.approx(original_bounds.north)
+
+
+# Tests for _subset_array function
+def test_subset_array_basic(test_array):
+    """Test basic array subsetting functionality"""
+    transform = rasterio.transform.from_bounds(0, 0, 100, 100, 100, 100)
+    tile = mercantile.Tile(0, 0, 1)  # Simple tile
+
+    subset_array, subset_transform = kartapullautin2tiles._subset_array(
+        test_array, transform, array_crs="EPSG:4326", tile=tile
+    )
+
+    assert subset_array.shape[0] == 3  # Same number of channels
+    assert subset_array.shape[1] <= test_array.shape[1]  # Height should be <= original
+    assert subset_array.shape[2] <= test_array.shape[2]  # Width should be <= original
+    assert isinstance(subset_transform, rasterio.Affine)
+
+
+def test_subset_array_no_overlap_raises_error():
+    """Test that subsetting with no overlap raises ValueError"""
+    # Create array covering coordinates 1000-2000, 1000-2000
+    array = np.random.randint(0, 255, (3, 100, 100), dtype=np.uint8)
+    transform = rasterio.transform.from_bounds(1000, 1000, 2000, 2000, 100, 100)
+    # Tile covering coordinates around 0,0 (no overlap)
+    tile = mercantile.Tile(0, 0, 1)
+
+    with pytest.raises(ValueError, match="Tile does not overlap with input array"):
+        kartapullautin2tiles._subset_array(array, transform, array_crs="EPSG:4326", tile=tile)
+
+
+def test_subset_array_edge_cases():
+    """Test edge cases for array subsetting"""
+    # Very small array
+    array = np.ones((3, 5, 5), dtype=np.uint8)
+    transform = rasterio.transform.from_bounds(-1, -1, 1, 1, 5, 5)
+    tile = mercantile.Tile(0, 0, 1)
+
+    subset_array, subset_transform = kartapullautin2tiles._subset_array(
+        array, transform, array_crs="EPSG:4326", tile=tile
+    )
+
+    assert subset_array.shape[0] == 3
+    assert subset_array.size > 0  # Should have some data
+
+
+# Tests for extract_and_transform_tile function
+def test_extract_and_transform_tile_basic(test_array):
+    """Test basic tile extraction and transformation"""
+    transform = rasterio.transform.from_bounds(-180, -85, 180, 85, 100, 100)
+    tile = mercantile.Tile(0, 0, 1)
+
+    result = kartapullautin2tiles.extract_and_transform_tile(test_array, transform, tile, src_crs="EPSG:4326")
+
+    assert isinstance(result, Image.Image)
+    assert result.size == (256, 256)  # Default tile size
+    assert result.mode == "RGB"
+
+
+@pytest.mark.parametrize("tile_size", [128, 256, 512])
+def test_extract_and_transform_tile_sizes(tile_size):
+    """Test tile extraction with different tile sizes"""
+    array = np.random.randint(0, 255, (3, 50, 50), dtype=np.uint8)
+    transform = rasterio.transform.from_bounds(-1, -1, 1, 1, 50, 50)
+    tile = mercantile.Tile(0, 0, 1)
+
+    result = kartapullautin2tiles.extract_and_transform_tile(
+        array, transform, tile, src_crs="EPSG:4326", tile_size=tile_size
+    )
+
+    assert result.size == (tile_size, tile_size)
+
+
+def test_extract_and_transform_tile_no_overlap():
+    """Test tile extraction when there's no overlap (should return white tile)"""
+    # Array covering a different area than the tile
+    array = np.random.randint(0, 255, (3, 50, 50), dtype=np.uint8)
+    transform = rasterio.transform.from_bounds(1000, 1000, 2000, 2000, 50, 50)
+    tile = mercantile.Tile(0, 0, 1)  # Tile around 0,0
+
+    result = kartapullautin2tiles.extract_and_transform_tile(array, transform, tile, src_crs="EPSG:4326")
+
+    # Should return a white (255, 255, 255) tile when no data overlaps
+    assert isinstance(result, Image.Image)
+    assert result.size == (256, 256)
+    # Check if most pixels are white (255) - allowing for some edge effects
+    pixel_array = np.array(result)
+    white_pixels = np.sum(pixel_array == 255)
+    total_pixels = pixel_array.size
+    assert white_pixels / total_pixels > 0.9  # Most pixels should be white
+
+
+# Tests for make_tiles function
+def test_make_tiles_basic(sample_geodataframe):
+    """Test basic tile generation"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_dir = Path(tmp_dir)
+
+        # Use small zoom range for faster testing
+        kartapullautin2tiles.make_tiles(sample_geodataframe, out_dir=out_dir, min_zoom=10, max_zoom=12)
+
+        # Check that some tiles were created
+        assert out_dir.exists()
+        zoom_dirs = list(out_dir.glob("*"))
+        assert len(zoom_dirs) > 0
+
+        # Check directory structure exists (z/x/y.png)
+        for zoom_dir in zoom_dirs:
+            if zoom_dir.is_dir():
+                x_dirs = list(zoom_dir.glob("*"))
+                if x_dirs:  # Only check if there are x directories
+                    assert any(x_dir.is_dir() for x_dir in x_dirs)
+                    for x_dir in x_dirs:
+                        if x_dir.is_dir():
+                            png_files = list(x_dir.glob("*.png"))
+                            if png_files:  # Only check if there are PNG files
+                                assert all(f.suffix == ".png" for f in png_files)
+
+
+@pytest.mark.parametrize(
+    "min_zoom,max_zoom",
+    [
+        (8, 10),
+        (12, 14),
+        (10, 10),  # Same min and max zoom
+    ],
+)
+def test_make_tiles_zoom_levels(sample_geodataframe, min_zoom, max_zoom):
+    """Test tile generation with different zoom levels"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_dir = Path(tmp_dir)
+
+        kartapullautin2tiles.make_tiles(sample_geodataframe, out_dir=out_dir, min_zoom=min_zoom, max_zoom=max_zoom)
+
+        # Check that output directory exists
+        assert out_dir.exists()
+
+
+def test_make_tiles_empty_geodataframe(empty_geodataframe):
+    """Test make_tiles with empty GeoDataFrame"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_dir = Path(tmp_dir)
+
+        kartapullautin2tiles.make_tiles(empty_geodataframe, out_dir=out_dir, min_zoom=10, max_zoom=12)
+
+        # Should complete without error, but no tiles created
+        assert out_dir.exists()
+
+
+def test_make_tiles_no_crs_raises_assertion(sample_polygon):
+    """Test that make_tiles raises AssertionError when GeoDataFrame has no CRS"""
+    gpdf_no_crs = gpd.GeoDataFrame({"geometry": [sample_polygon]}, crs=None)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        out_dir = Path(tmp_dir)
+
+        with pytest.raises(AssertionError):
+            kartapullautin2tiles.make_tiles(gpdf_no_crs, out_dir=out_dir, min_zoom=10, max_zoom=12)
+
+
+# Tests for module constants
+def test_wgs84_crs_constant():
+    """Test that WGS84 CRS constant is correct"""
+    assert kartapullautin2tiles.WGS_84_CRS == "EPSG:4326"
+
+
+def test_logger_exists():
+    """Test that logger is properly configured"""
+    assert hasattr(kartapullautin2tiles, "logger")
+    assert kartapullautin2tiles.logger.name == "kartapullautin2tiles"

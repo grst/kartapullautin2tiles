@@ -69,7 +69,11 @@ def load_kartapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", patter
     pattern
         search pattern for the output folder
     """
-    return gpd.GeoDataFrame((_load_img(f) for f in dir.glob(pattern)), crs=proj)
+    files = list(dir.glob(pattern))
+    if not files:
+        # Return empty GeoDataFrame with correct columns and CRS
+        return gpd.GeoDataFrame(columns=["id", "pgw_file", "img_file", "geometry"], crs=proj)
+    return gpd.GeoDataFrame((_load_img(f) for f in files), crs=proj)
 
 
 def _get_tile_bb(tile: mercantile.Tile, crs: str | CRS):
@@ -192,6 +196,7 @@ def extract_and_transform_tile(
             src_crs=src_crs,
             dst_transform=dst_transform,
             dst_crs=WGS_84_CRS,
+            dst_nodata=255,
             resampling=rasterio.warp.Resampling.lanczos,
         )
     except ValueError:
@@ -217,6 +222,10 @@ def make_tiles(gpdf: gpd.GeoDataFrame, *, out_dir: Path, min_zoom: int = 10, max
     """
     assert gpdf.crs is not None
     transformer_to_wgs84 = pyproj.Transformer.from_crs(gpdf.crs, WGS_84_CRS, always_xy=True)
+
+    if not gpdf.shape[0]:
+        logging.info("No tiles found. Exiting")
+        return
 
     # overall bounding box in EPSG:4326
     west_lon, south_lat = transformer_to_wgs84.transform(*gpdf.total_bounds[:2])
