@@ -46,6 +46,50 @@ def test_load_img_pgw_parsing(temp_image_files):
     assert bounds[3] == 200.0  # maxy
 
 
+# Tests for _get_tiles_center function
+def test_get_tiles_center_basic():
+    """Test getting center of a set of tiles"""
+    tiles = [
+        mercantile.Tile(0, 0, 1),
+        mercantile.Tile(1, 0, 1),
+        mercantile.Tile(0, 1, 1),
+        mercantile.Tile(1, 1, 1),
+    ]
+
+    result = kartapullautin2tiles._get_tiles_center(tiles)
+
+    assert result is not None
+    lon, lat = result
+    assert isinstance(lon, float)
+    assert isinstance(lat, float)
+    # Center should be around 0,0 for these tiles
+    assert abs(lon) < 1
+    assert abs(lat) < 1
+
+
+def test_get_tiles_center_empty():
+    """Test getting center of empty tile list"""
+    result = kartapullautin2tiles._get_tiles_center([])
+    assert result is None
+
+
+def test_get_tiles_center_single_tile():
+    """Test getting center of a single tile"""
+    tile = mercantile.Tile(100, 50, 10)
+    result = kartapullautin2tiles._get_tiles_center([tile])
+
+    assert result is not None
+    lon, lat = result
+
+    # For a single tile, center should be the tile's center
+    bounds = mercantile.bounds(tile)
+    expected_lon = (bounds.west + bounds.east) / 2
+    expected_lat = (bounds.south + bounds.north) / 2
+
+    assert lon == pytest.approx(expected_lon)
+    assert lat == pytest.approx(expected_lat)
+
+
 # Tests for load_kartapullautin_dir function
 def test_load_kartapullautin_dir_default_params(test_data_dir):
     """Test loading directory with default parameters"""
@@ -84,6 +128,40 @@ def test_load_kartapullautin_dir_empty_pattern(test_data_dir):
 
     assert isinstance(result, gpd.GeoDataFrame)
     assert len(result) == 0
+
+
+# Tests for list_tiles function
+def test_list_tiles_basic(test_data_dir):
+    """Test basic tile listing functionality"""
+    tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
+
+    assert len(tiles) > 0
+    assert all(isinstance(tile, mercantile.Tile) for tile in tiles)
+    assert all(tile.z == 12 for tile in tiles)
+
+
+def test_list_tiles_empty_directory():
+    """Test list_tiles with empty directory"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tiles = list(kartapullautin2tiles.list_tiles(Path(tmp_dir), min_zoom=12))
+        assert len(tiles) == 0
+
+
+@pytest.mark.parametrize("min_zoom", [8, 10, 12, 15])
+def test_list_tiles_different_zoom_levels(test_data_dir, min_zoom):
+    """Test list_tiles with different zoom levels"""
+    tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=min_zoom))
+
+    if len(tiles) > 0:  # Only check if tiles were found
+        assert all(tile.z == min_zoom for tile in tiles)
+
+
+def test_list_tiles_custom_params(test_data_dir):
+    """Test list_tiles with custom projection and pattern"""
+    tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, proj="EPSG:25832", pattern="*depr*.pgw", min_zoom=10))
+
+    assert len(tiles) > 0
+    assert all(tile.z == 10 for tile in tiles)
 
 
 # Tests for _get_tile_bb function
@@ -212,14 +290,19 @@ def test_extract_and_transform_tile_no_overlap():
     assert white_pixels / total_pixels > 0.9  # Most pixels should be white
 
 
-# Tests for make_tiles function
-def test_make_tiles_basic(sample_geodataframe):
-    """Test basic tile generation"""
+# Tests for make_tiles function (updated signature)
+def test_make_tiles_basic(test_data_dir):
+    """Test basic tile generation with new signature"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_dir = Path(tmp_dir)
 
-        # Use small zoom range for faster testing
-        kartapullautin2tiles.make_tiles(sample_geodataframe, out_dir=out_dir, min_zoom=10, max_zoom=12)
+        # Get tiles using list_tiles function
+        tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
+
+        # Use make_tiles with new signature
+        kartapullautin2tiles.make_tiles(
+            in_dir=test_data_dir, out_dir=out_dir, tiles=tiles, proj="EPSG:25832", pattern="*depr*.pgw", max_zoom=14
+        )
 
         # Check that some tiles were created
         assert out_dir.exists()
@@ -239,45 +322,70 @@ def test_make_tiles_basic(sample_geodataframe):
                                 assert all(f.suffix == ".png" for f in png_files)
 
 
-@pytest.mark.parametrize(
-    "min_zoom,max_zoom",
-    [
-        (8, 10),
-        (12, 14),
-        (10, 10),  # Same min and max zoom
-    ],
-)
-def test_make_tiles_zoom_levels(sample_geodataframe, min_zoom, max_zoom):
-    """Test tile generation with different zoom levels"""
+def test_make_tiles_empty_tiles_list():
+    """Test make_tiles with empty tiles list"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_dir = Path(tmp_dir)
 
-        kartapullautin2tiles.make_tiles(sample_geodataframe, out_dir=out_dir, min_zoom=min_zoom, max_zoom=max_zoom)
+        kartapullautin2tiles.make_tiles(
+            in_dir=Path("/nonexistent"),  # Won't be accessed due to empty tiles
+            out_dir=out_dir,
+            tiles=[],
+            max_zoom=14,
+        )
 
-        # Check that output directory exists
+        # Should complete without error
         assert out_dir.exists()
 
 
-def test_make_tiles_empty_geodataframe(empty_geodataframe):
-    """Test make_tiles with empty GeoDataFrame"""
+@pytest.mark.parametrize("max_zoom", [13, 15, 17])
+def test_make_tiles_different_max_zoom(test_data_dir, max_zoom):
+    """Test make_tiles with different max zoom levels"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_dir = Path(tmp_dir)
 
-        kartapullautin2tiles.make_tiles(empty_geodataframe, out_dir=out_dir, min_zoom=10, max_zoom=12)
+        tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
+        if not tiles:
+            pytest.skip("No tiles found for testing")
 
-        # Should complete without error, but no tiles created
+        kartapullautin2tiles.make_tiles(
+            in_dir=test_data_dir,
+            out_dir=out_dir,
+            tiles=tiles[:1],  # Use only first tile for faster testing
+            max_zoom=max_zoom,
+        )
+
         assert out_dir.exists()
 
 
-def test_make_tiles_no_crs_raises_assertion(sample_polygon):
-    """Test that make_tiles raises AssertionError when GeoDataFrame has no CRS"""
-    gpdf_no_crs = gpd.GeoDataFrame({"geometry": [sample_polygon]}, crs=None)
+# Tests for get_html_viewer function
+def test_get_html_viewer_basic():
+    """Test HTML viewer generation"""
+    html = kartapullautin2tiles.get_html_viewer(
+        lon_center=10.0, lat_center=50.0, default_zoom=12, min_zoom=8, max_zoom=16
+    )
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        out_dir = Path(tmp_dir)
+    assert isinstance(html, str)
+    assert len(html) > 0
+    assert "10.0" in html  # lon_center should be in HTML
+    assert "50.0" in html  # lat_center should be in HTML
+    assert "12" in html  # default_zoom should be in HTML
 
-        with pytest.raises(AssertionError):
-            kartapullautin2tiles.make_tiles(gpdf_no_crs, out_dir=out_dir, min_zoom=10, max_zoom=12)
+
+def test_get_html_viewer_parameters():
+    """Test that HTML viewer contains all specified parameters"""
+    lon_center, lat_center = -120.5, 35.2
+    default_zoom, min_zoom, max_zoom = 10, 5, 18
+
+    html = kartapullautin2tiles.get_html_viewer(
+        lon_center=lon_center, lat_center=lat_center, default_zoom=default_zoom, min_zoom=min_zoom, max_zoom=max_zoom
+    )
+
+    assert str(lon_center) in html
+    assert str(lat_center) in html
+    assert str(default_zoom) in html
+    assert str(min_zoom) in html
+    assert str(max_zoom) in html
 
 
 # Tests for module constants
