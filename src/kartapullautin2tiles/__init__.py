@@ -176,7 +176,7 @@ def extract_and_transform_tile(
     tile_wgs84_bounds = mercantile.bounds(tile)
 
     # Create empty tile
-    dst_array = np.zeros((3, tile_size, tile_size), dtype=array.dtype)
+    dst_array = np.full((3, tile_size, tile_size), dtype=array.dtype, fill_value=255)
 
     try:
         subset_array, subset_transform = _subset_array(array, transform, array_crs=src_crs, tile=tile)
