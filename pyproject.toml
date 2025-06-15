@@ -1,10 +1,9 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = [ "hatchling" ]
+requires = [ "hatch-vcs", "hatchling" ]
 
 [project]
 name = "karttapullautin2tiles"
-version = "0.0.1"
 description = "Convert the output of karttapullautin into web mercator tiles"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -18,6 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
+dynamic = [ "version" ]
 dependencies = [
   "cyclopts>=3.16.1",
   "geopandas>=1.0.1",
@@ -57,6 +57,9 @@ scripts.k2t = "karttapullautin2tiles.cli:app"
 [tool.hatch.envs.default]
 installer = "uv"
 features = [ "dev" ]
+
+[tool.hatch.version]
+source = "vcs"
 
 [tool.hatch.envs.docs]
 features = [ "doc" ]
