@@ -310,7 +310,7 @@ def make_tiles(
 
         # stitch tiles
         img_array, img_transform = rasterio.merge.merge(
-            tmp_df["img_file"], bounds=tuple(gpdf.total_bounds), nodata=255, dtype=np.uint8
+            tmp_df["img_file"], bounds=tuple(tmp_df.total_bounds), nodata=255, dtype=np.uint8
         )
         for zoom in range(parent_tile.z + 1, max_zoom + 1):
             for tile in mercantile.children(parent_tile, zoom=zoom):

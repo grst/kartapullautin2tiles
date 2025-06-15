@@ -84,6 +84,7 @@ def make_tiles(
     if not len(tiles):
         return
 
+    out_dir.mkdir(parents=True, exist_ok=True)
     k2t.make_tiles(in_dir, out_dir, tiles, proj=proj, pattern=pattern, max_zoom=max_zoom)
     if include_viewer:
         html = k2t.get_html_viewer(
