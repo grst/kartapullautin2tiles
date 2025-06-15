@@ -2,7 +2,6 @@ import importlib.resources
 import logging
 import sys
 from collections.abc import Sequence
-from functools import lru_cache
 from importlib.metadata import version
 from pathlib import Path
 
@@ -18,7 +17,6 @@ from PIL import Image
 from pyproj.crs.crs import CRS
 from rasterio.transform import from_bounds
 from shapely.geometry import Polygon
-from tqdm import tqdm
 
 __version__ = version("karttapullautin2tiles")
 

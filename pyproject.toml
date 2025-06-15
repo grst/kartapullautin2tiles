@@ -19,18 +19,13 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-  "anndata",
-  # for debug logging (referenced from the issue template)
   "cyclopts>=3.16.1",
   "geopandas>=1.0.1",
   "imagesize>=1.4.1",
-  "ipykernel>=6.29.5",
-  "matplotlib>=3.10.3",
   "mercantile>=1.2.1",
   "pillow>=11.2.1",
   "pyproj>=3.7.1",
   "rasterio>=1.4.3",
-  "session-info2",
   "tqdm>=4.67.1",
 ]
 
