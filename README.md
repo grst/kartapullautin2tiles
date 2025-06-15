@@ -39,7 +39,8 @@ across multiple processes, or even machines. For instance, you can use [GNU para
 across multiple processes:
 
 ```bash
-k2t list-tiles --zoom 12 karttapullautin/out | parallel --pipe -j 6 --block 1 k2t make-tiles karttapullautin/out karttapullautin/tiles
+k2t list-tiles --zoom 12 karttapullautin/out | \
+  parallel --pipe -j 6 --block 1 k2t make-tiles karttapullautin/out karttapullautin/tiles
 ```
 
 ## Command reference
@@ -49,7 +50,7 @@ and the zoom levels you want to generate.
 
 ### `k2t list-tiles`
 
-```
+```console
 Usage: k2t list-tiles [ARGS] [OPTIONS]
 
 List the tiles that are covered by the karttapullautin output directory at the given zoom
@@ -70,7 +71,7 @@ in chunks) to the make-tiles command.
 
 ### `k2t make-tiles`
 
-```
+```console
 Usage: k2t make-tiles [ARGS] [OPTIONS]
 
 Create a web mercator tiles from karttapullautin output, given a list of tile coordinates.
