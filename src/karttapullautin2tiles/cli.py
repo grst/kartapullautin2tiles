@@ -1,4 +1,4 @@
-"""Command-line interface for kartapullautin2tiles using cyclopts."""
+"""Command-line interface for karttapullautin2tiles using cyclopts."""
 
 import json
 import sys
@@ -7,7 +7,7 @@ from pathlib import Path
 import cyclopts
 from mercantile import Tile
 
-import kartapullautin2tiles as k2t
+import karttapullautin2tiles as k2t
 
 app = cyclopts.App()
 
@@ -15,14 +15,14 @@ app = cyclopts.App()
 @app.command
 def list_tiles(dir: Path, *, proj: str = "EPSG:25832", pattern="*depr*.pgw", zoom: int = 12):
     """
-    List the tiles that are covered by the kartapullautin directory at the given zoom level.
+    List the tiles that are covered by the karttapullautin directory at the given zoom level.
 
     Use this as a list of tiles that can be passed to make-tiles.
 
     Parameters
     ----------
     dir
-        Input directory (kartapullautin output dir)
+        Input directory (karttapullautin output dir)
     proj
         EPSG string of the projection used
     pattern
@@ -46,7 +46,7 @@ def make_tiles(
     include_viewer: bool = True,
 ):
     """
-    Create a tile directory from kartapullautin output.
+    Create a tile directory from karttapullautin output.
 
     Note that all images required for a tile at min_zoom need to fit in memory. If you have
     memory issues, consider setting a higher zoom level.
@@ -58,7 +58,7 @@ def make_tiles(
     Parameters
     ----------
     in_dir
-        Input directory containing kartapullautin output files
+        Input directory containing karttapullautin output files
     out_dir
         Output directory for tiles (z/x/y folder structure)
     tile_list

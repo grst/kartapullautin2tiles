@@ -20,7 +20,7 @@ from rasterio.transform import from_bounds
 from shapely.geometry import Polygon
 from tqdm import tqdm
 
-__version__ = version("kartapullautin2tiles")
+__version__ = version("karttapullautin2tiles")
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 logger = logging.getLogger(__name__)
@@ -77,14 +77,14 @@ def _get_tiles_center(tiles: Sequence[mercantile.Tile]) -> tuple[float, float] |
     return center_x, center_y
 
 
-def load_kartapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", pattern="*depr*.pgw") -> gpd.GeoDataFrame:
+def load_karttapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", pattern="*depr*.pgw") -> gpd.GeoDataFrame:
     """
     Load coordinates from pgw files into a GeoPandas data frame
 
     Parameters
     ----------
     dir
-        input directory (kartapullautin output dir)
+        input directory (karttapullautin output dir)
     proj
         EPSG string of the projection used
     pattern
@@ -232,14 +232,14 @@ def extract_and_transform_tile(
 
 def list_tiles(dir: Path, *, proj: str = "EPSG:25832", pattern="*depr*.pgw", min_zoom: int = 12):
     """
-    List the tiles that are covered by the kartapullautin directory at the given zoom level.
+    List the tiles that are covered by the karttapullautin directory at the given zoom level.
 
     Use this as a list of tiles that can be passed to make_tiles.
 
     Parameters
     ----------
     dir
-        Input directory (kartapullautin output dir)
+        Input directory (karttapullautin output dir)
     proj
         EPSG string of the projection used
     pattern
@@ -251,7 +251,7 @@ def list_tiles(dir: Path, *, proj: str = "EPSG:25832", pattern="*depr*.pgw", min
     -------
     Generator of tiles that cover the bounding box of all images in the directory
     """
-    gpdf = load_kartapullautin_dir(dir, proj=proj, pattern=pattern)
+    gpdf = load_karttapullautin_dir(dir, proj=proj, pattern=pattern)
 
     transformer_to_wgs84 = pyproj.Transformer.from_crs(gpdf.crs, WGS_84_CRS, always_xy=True)
 
@@ -276,7 +276,7 @@ def make_tiles(
     max_zoom: int = 17,
 ):
     """
-    Create a tile directory from kartapullautin output.
+    Create a tile directory from karttapullautin output.
 
     Note that all images required for a tile at min_zoom need to fit in memory. If you have
     memory issues, consider setting a higher zoom level.
@@ -284,7 +284,7 @@ def make_tiles(
     Parameters
     ----------
     in_dir
-        Input directory containing kartapullautin output files
+        Input directory containing karttapullautin output files
     out_dir
         Output directory for tiles (z/x/y folder structure)
     tiles
@@ -296,7 +296,7 @@ def make_tiles(
     max_zoom
         Maximum zoom level to generate tiles for
     """
-    gpdf = load_kartapullautin_dir(in_dir, proj=proj, pattern=pattern)
+    gpdf = load_karttapullautin_dir(in_dir, proj=proj, pattern=pattern)
     assert gpdf.crs is not None
 
     # iterate over min zoom tiles
@@ -334,7 +334,7 @@ def get_html_viewer(lon_center: float, lat_center: float, *, default_zoom: int, 
     default_zoom
         default zoom
     """
-    html_template = (importlib.resources.files("kartapullautin2tiles.assets") / "local_tiles_viewer.html").read_text(
+    html_template = (importlib.resources.files("karttapullautin2tiles.assets") / "local_tiles_viewer.html").read_text(
         "utf-8"
     )
 

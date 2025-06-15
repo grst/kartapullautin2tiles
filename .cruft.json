@@ -1,43 +1,43 @@
 {
-  "template": "https://github.com/scverse/cookiecutter-scverse",
-  "commit": "001285e45d2a513d51a7b6551a9af271cb7c456b",
-  "checkout": null,
-  "context": {
-    "cookiecutter": {
-      "project_name": "kartapullautin2tiles",
-      "package_name": "kartapullautin2tiles",
-      "project_description": "Convert the output of kartapullautin into web mercator tiles",
-      "author_full_name": "Gregor Sturm",
-      "author_email": "gregor@sturmcloud.org",
-      "github_user": "grst",
-      "github_repo": "kartapullautin2tiles",
-      "license": "GNU General Public License Version 3",
-      "ide_integration": true,
-      "_copy_without_render": [
-        ".github/workflows/build.yaml",
-        ".github/workflows/test.yaml",
-        "docs/_templates/autosummary/**.rst"
-      ],
-      "_exclude_on_template_update": [
-        "CHANGELOG.md",
-        "LICENSE",
-        "README.md",
-        "docs/api.md",
-        "docs/index.md",
-        "docs/notebooks/example.ipynb",
-        "docs/references.bib",
-        "docs/references.md",
-        "src/**",
-        "tests/**"
-      ],
-      "_render_devdocs": false,
-      "_jinja2_env_vars": {
-        "lstrip_blocks": true,
-        "trim_blocks": true
-      },
-      "_template": "https://github.com/scverse/cookiecutter-scverse",
-      "_commit": "001285e45d2a513d51a7b6551a9af271cb7c456b"
-    }
-  },
-  "directory": null
+    "template": "https://github.com/scverse/cookiecutter-scverse",
+    "commit": "001285e45d2a513d51a7b6551a9af271cb7c456b",
+    "checkout": null,
+    "context": {
+        "cookiecutter": {
+            "project_name": "karttapullautin2tiles",
+            "package_name": "karttapullautin2tiles",
+            "project_description": "Convert the output of karttapullautin into web mercator tiles",
+            "author_full_name": "Gregor Sturm",
+            "author_email": "gregor@sturmcloud.org",
+            "github_user": "grst",
+            "github_repo": "karttapullautin2tiles",
+            "license": "GNU General Public License Version 3",
+            "ide_integration": true,
+            "_copy_without_render": [
+                ".github/workflows/build.yaml",
+                ".github/workflows/test.yaml",
+                "docs/_templates/autosummary/**.rst"
+            ],
+            "_exclude_on_template_update": [
+                "CHANGELOG.md",
+                "LICENSE",
+                "README.md",
+                "docs/api.md",
+                "docs/index.md",
+                "docs/notebooks/example.ipynb",
+                "docs/references.bib",
+                "docs/references.md",
+                "src/**",
+                "tests/**"
+            ],
+            "_render_devdocs": false,
+            "_jinja2_env_vars": {
+                "lstrip_blocks": true,
+                "trim_blocks": true
+            },
+            "_template": "https://github.com/scverse/cookiecutter-scverse",
+            "_commit": "001285e45d2a513d51a7b6551a9af271cb7c456b"
+        }
+    },
+    "directory": null
 }

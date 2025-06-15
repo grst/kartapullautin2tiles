@@ -1,12 +1,12 @@
-# kartapullautin2tiles
+# karttapullautin2tiles
 
 [![Tests][badge-tests]][tests]
 [![Documentation][badge-docs]][documentation]
 
-[badge-tests]: https://img.shields.io/github/actions/workflow/status/grst/kartapullautin2tiles/test.yaml?branch=main
-[badge-docs]: https://img.shields.io/readthedocs/kartapullautin2tiles
+[badge-tests]: https://img.shields.io/github/actions/workflow/status/grst/karttapullautin2tiles/test.yaml?branch=main
+[badge-docs]: https://img.shields.io/readthedocs/karttapullautin2tiles
 
-Convert the output of kartapullautin into web mercator tiles
+Convert the output of karttapullautin into web mercator tiles
 
 ## Getting started
 
@@ -18,20 +18,20 @@ in particular, the [API documentation][].
 You need to have Python 3.10 or newer installed on your system.
 If you don't have Python installed, we recommend installing [uv][].
 
-There are several alternative options to install kartapullautin2tiles:
+There are several alternative options to install karttapullautin2tiles:
 
 <!--
-1) Install the latest release of `kartapullautin2tiles` from [PyPI][]:
+1) Install the latest release of `karttapullautin2tiles` from [PyPI][]:
 
 ```bash
-pip install kartapullautin2tiles
+pip install karttapullautin2tiles
 ```
 -->
 
 1. Install the latest development version:
 
 ```bash
-pip install git+https://github.com/grst/kartapullautin2tiles.git@main
+pip install git+https://github.com/grst/karttapullautin2tiles.git@main
 ```
 
 ## Release notes
@@ -49,9 +49,9 @@ If you found a bug, please use the [issue tracker][].
 
 [uv]: https://github.com/astral-sh/uv
 [scverse discourse]: https://discourse.scverse.org/
-[issue tracker]: https://github.com/grst/kartapullautin2tiles/issues
-[tests]: https://github.com/grst/kartapullautin2tiles/actions/workflows/test.yaml
-[documentation]: https://kartapullautin2tiles.readthedocs.io
-[changelog]: https://kartapullautin2tiles.readthedocs.io/en/latest/changelog.html
-[api documentation]: https://kartapullautin2tiles.readthedocs.io/en/latest/api.html
-[pypi]: https://pypi.org/project/kartapullautin2tiles
+[issue tracker]: https://github.com/grst/karttapullautin2tiles/issues
+[tests]: https://github.com/grst/karttapullautin2tiles/actions/workflows/test.yaml
+[documentation]: https://karttapullautin2tiles.readthedocs.io
+[changelog]: https://karttapullautin2tiles.readthedocs.io/en/latest/changelog.html
+[api documentation]: https://karttapullautin2tiles.readthedocs.io/en/latest/api.html
+[pypi]: https://pypi.org/project/karttapullautin2tiles

@@ -1043,7 +1043,7 @@ wheels = [
 ]
 
 [[package]]
-name = "kartapullautin2tiles"
+name = "karttapullautin2tiles"
 version = "0.0.1"
 source = { editable = "." }
 dependencies = [

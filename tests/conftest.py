@@ -2,18 +2,17 @@ import tempfile
 from pathlib import Path
 
 import geopandas as gpd
+import karttapullautin2tiles
 import numpy as np
 import pytest
 from PIL import Image
 from shapely.geometry import Polygon
 
-import kartapullautin2tiles
-
 
 @pytest.fixture
 def test_data_dir():
     """Path to test data directory"""
-    return Path(__file__).parent / "data" / "kartapullautin_out"
+    return Path(__file__).parent / "data" / "karttapullautin_out"
 
 
 @pytest.fixture
@@ -25,7 +24,7 @@ def sample_pgw_file(test_data_dir):
 @pytest.fixture
 def sample_geodataframe(test_data_dir):
     """Sample GeoDataFrame loaded from test data"""
-    return kartapullautin2tiles.load_kartapullautin_dir(test_data_dir)
+    return karttapullautin2tiles.load_karttapullautin_dir(test_data_dir)
 
 
 @pytest.fixture

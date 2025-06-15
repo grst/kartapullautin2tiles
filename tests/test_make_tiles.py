@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 
 import geopandas as gpd
+import karttapullautin2tiles
 import mercantile
 import numpy as np
 import pytest
@@ -10,17 +11,15 @@ from PIL import Image
 from pyproj.crs.crs import CRS
 from shapely.geometry import Polygon
 
-import kartapullautin2tiles
-
 
 def test_package_has_version():
-    assert kartapullautin2tiles.__version__ is not None
+    assert karttapullautin2tiles.__version__ is not None
 
 
 # Tests for _load_img function
 def test_load_img_with_valid_pgw(sample_pgw_file):
     """Test loading a valid PGW file"""
-    result = kartapullautin2tiles._load_img(sample_pgw_file)
+    result = karttapullautin2tiles._load_img(sample_pgw_file)
 
     assert result["id"] == "576_5265.laz_depr"
     assert result["pgw_file"] == sample_pgw_file
@@ -35,7 +34,7 @@ def test_load_img_with_valid_pgw(sample_pgw_file):
 
 def test_load_img_pgw_parsing(temp_image_files):
     """Test that PGW file parameters are parsed correctly"""
-    result = kartapullautin2tiles._load_img(temp_image_files["pgw_file"])
+    result = karttapullautin2tiles._load_img(temp_image_files["pgw_file"])
 
     # Check the geometry bounds match expected values
     # With pixel size 1.0, -1.0 and 10x10 image starting at (100, 200)
@@ -56,7 +55,7 @@ def test_get_tiles_center_basic():
         mercantile.Tile(1, 1, 1),
     ]
 
-    result = kartapullautin2tiles._get_tiles_center(tiles)
+    result = karttapullautin2tiles._get_tiles_center(tiles)
 
     assert result is not None
     lon, lat = result
@@ -69,14 +68,14 @@ def test_get_tiles_center_basic():
 
 def test_get_tiles_center_empty():
     """Test getting center of empty tile list"""
-    result = kartapullautin2tiles._get_tiles_center([])
+    result = karttapullautin2tiles._get_tiles_center([])
     assert result is None
 
 
 def test_get_tiles_center_single_tile():
     """Test getting center of a single tile"""
     tile = mercantile.Tile(100, 50, 10)
-    result = kartapullautin2tiles._get_tiles_center([tile])
+    result = karttapullautin2tiles._get_tiles_center([tile])
 
     assert result is not None
     lon, lat = result
@@ -90,10 +89,10 @@ def test_get_tiles_center_single_tile():
     assert lat == pytest.approx(expected_lat)
 
 
-# Tests for load_kartapullautin_dir function
-def test_load_kartapullautin_dir_default_params(test_data_dir):
+# Tests for load_karttapullautin_dir function
+def test_load_karttapullautin_dir_default_params(test_data_dir):
     """Test loading directory with default parameters"""
-    result = kartapullautin2tiles.load_kartapullautin_dir(test_data_dir)
+    result = karttapullautin2tiles.load_karttapullautin_dir(test_data_dir)
 
     assert isinstance(result, gpd.GeoDataFrame)
     assert result.crs == "EPSG:25832"
@@ -109,9 +108,9 @@ def test_load_kartapullautin_dir_default_params(test_data_dir):
         (CRS.from_epsg(25832), "*depr*.pgw", 6),
     ],
 )
-def test_load_kartapullautin_dir_params(test_data_dir, proj, pattern, expected_count):
+def test_load_karttapullautin_dir_params(test_data_dir, proj, pattern, expected_count):
     """Test loading directory with different parameters"""
-    result = kartapullautin2tiles.load_kartapullautin_dir(test_data_dir, proj=proj, pattern=pattern)
+    result = karttapullautin2tiles.load_karttapullautin_dir(test_data_dir, proj=proj, pattern=pattern)
 
     assert isinstance(result, gpd.GeoDataFrame)
     assert len(result) == expected_count
@@ -122,9 +121,9 @@ def test_load_kartapullautin_dir_params(test_data_dir, proj, pattern, expected_c
         assert result.crs.to_epsg() == proj.to_epsg()
 
 
-def test_load_kartapullautin_dir_empty_pattern(test_data_dir):
+def test_load_karttapullautin_dir_empty_pattern(test_data_dir):
     """Test loading directory with pattern that matches no files"""
-    result = kartapullautin2tiles.load_kartapullautin_dir(test_data_dir, pattern="nonexistent*.pgw")
+    result = karttapullautin2tiles.load_karttapullautin_dir(test_data_dir, pattern="nonexistent*.pgw")
 
     assert isinstance(result, gpd.GeoDataFrame)
     assert len(result) == 0
@@ -133,7 +132,7 @@ def test_load_kartapullautin_dir_empty_pattern(test_data_dir):
 # Tests for list_tiles function
 def test_list_tiles_basic(test_data_dir):
     """Test basic tile listing functionality"""
-    tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
+    tiles = list(karttapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
 
     assert len(tiles) > 0
     assert all(isinstance(tile, mercantile.Tile) for tile in tiles)
@@ -143,14 +142,14 @@ def test_list_tiles_basic(test_data_dir):
 def test_list_tiles_empty_directory():
     """Test list_tiles with empty directory"""
     with tempfile.TemporaryDirectory() as tmp_dir:
-        tiles = list(kartapullautin2tiles.list_tiles(Path(tmp_dir), min_zoom=12))
+        tiles = list(karttapullautin2tiles.list_tiles(Path(tmp_dir), min_zoom=12))
         assert len(tiles) == 0
 
 
 @pytest.mark.parametrize("min_zoom", [8, 10, 12, 15])
 def test_list_tiles_different_zoom_levels(test_data_dir, min_zoom):
     """Test list_tiles with different zoom levels"""
-    tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=min_zoom))
+    tiles = list(karttapullautin2tiles.list_tiles(test_data_dir, min_zoom=min_zoom))
 
     if len(tiles) > 0:  # Only check if tiles were found
         assert all(tile.z == min_zoom for tile in tiles)
@@ -158,7 +157,7 @@ def test_list_tiles_different_zoom_levels(test_data_dir, min_zoom):
 
 def test_list_tiles_custom_params(test_data_dir):
     """Test list_tiles with custom projection and pattern"""
-    tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, proj="EPSG:25832", pattern="*depr*.pgw", min_zoom=10))
+    tiles = list(karttapullautin2tiles.list_tiles(test_data_dir, proj="EPSG:25832", pattern="*depr*.pgw", min_zoom=10))
 
     assert len(tiles) > 0
     assert all(tile.z == 10 for tile in tiles)
@@ -177,7 +176,7 @@ def test_get_tile_bb_various_tiles(tile_z, tile_x, tile_y, crs):
     """Test getting bounding box for various tiles and CRS"""
     tile = mercantile.Tile(tile_x, tile_y, tile_z)
 
-    result = kartapullautin2tiles._get_tile_bb(tile, crs)
+    result = karttapullautin2tiles._get_tile_bb(tile, crs)
 
     assert len(result) == 4
     minx, miny, maxx, maxy = result
@@ -191,7 +190,7 @@ def test_get_tile_bb_consistency():
     tile = mercantile.Tile(1000, 600, 12)
     crs = "EPSG:4326"
 
-    result = kartapullautin2tiles._get_tile_bb(tile, crs)
+    result = karttapullautin2tiles._get_tile_bb(tile, crs)
     original_bounds = mercantile.bounds(tile)
 
     # For EPSG:4326, the bounds should be the same as mercantile.bounds
@@ -207,7 +206,7 @@ def test_subset_array_basic(test_array):
     transform = rasterio.transform.from_bounds(0, 0, 100, 100, 100, 100)
     tile = mercantile.Tile(0, 0, 1)  # Simple tile
 
-    subset_array, subset_transform = kartapullautin2tiles._subset_array(
+    subset_array, subset_transform = karttapullautin2tiles._subset_array(
         test_array, transform, array_crs="EPSG:4326", tile=tile
     )
 
@@ -226,7 +225,7 @@ def test_subset_array_no_overlap_raises_error():
     tile = mercantile.Tile(0, 0, 1)
 
     with pytest.raises(ValueError, match="Tile does not overlap with input array"):
-        kartapullautin2tiles._subset_array(array, transform, array_crs="EPSG:4326", tile=tile)
+        karttapullautin2tiles._subset_array(array, transform, array_crs="EPSG:4326", tile=tile)
 
 
 def test_subset_array_edge_cases():
@@ -236,7 +235,7 @@ def test_subset_array_edge_cases():
     transform = rasterio.transform.from_bounds(-1, -1, 1, 1, 5, 5)
     tile = mercantile.Tile(0, 0, 1)
 
-    subset_array, subset_transform = kartapullautin2tiles._subset_array(
+    subset_array, subset_transform = karttapullautin2tiles._subset_array(
         array, transform, array_crs="EPSG:4326", tile=tile
     )
 
@@ -250,7 +249,7 @@ def test_extract_and_transform_tile_basic(test_array):
     transform = rasterio.transform.from_bounds(-180, -85, 180, 85, 100, 100)
     tile = mercantile.Tile(0, 0, 1)
 
-    result = kartapullautin2tiles.extract_and_transform_tile(test_array, transform, tile, src_crs="EPSG:4326")
+    result = karttapullautin2tiles.extract_and_transform_tile(test_array, transform, tile, src_crs="EPSG:4326")
 
     assert isinstance(result, Image.Image)
     assert result.size == (256, 256)  # Default tile size
@@ -264,7 +263,7 @@ def test_extract_and_transform_tile_sizes(tile_size):
     transform = rasterio.transform.from_bounds(-1, -1, 1, 1, 50, 50)
     tile = mercantile.Tile(0, 0, 1)
 
-    result = kartapullautin2tiles.extract_and_transform_tile(
+    result = karttapullautin2tiles.extract_and_transform_tile(
         array, transform, tile, src_crs="EPSG:4326", tile_size=tile_size
     )
 
@@ -278,7 +277,7 @@ def test_extract_and_transform_tile_no_overlap():
     transform = rasterio.transform.from_bounds(1000, 1000, 2000, 2000, 50, 50)
     tile = mercantile.Tile(0, 0, 1)  # Tile around 0,0
 
-    result = kartapullautin2tiles.extract_and_transform_tile(array, transform, tile, src_crs="EPSG:4326")
+    result = karttapullautin2tiles.extract_and_transform_tile(array, transform, tile, src_crs="EPSG:4326")
 
     # Should return a white (255, 255, 255) tile when no data overlaps
     assert isinstance(result, Image.Image)
@@ -297,10 +296,10 @@ def test_make_tiles_basic(test_data_dir):
         out_dir = Path(tmp_dir)
 
         # Get tiles using list_tiles function
-        tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
+        tiles = list(karttapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
 
         # Use make_tiles with new signature
-        kartapullautin2tiles.make_tiles(
+        karttapullautin2tiles.make_tiles(
             in_dir=test_data_dir, out_dir=out_dir, tiles=tiles, proj="EPSG:25832", pattern="*depr*.pgw", max_zoom=14
         )
 
@@ -327,7 +326,7 @@ def test_make_tiles_empty_tiles_list():
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_dir = Path(tmp_dir)
 
-        kartapullautin2tiles.make_tiles(
+        karttapullautin2tiles.make_tiles(
             in_dir=Path("/nonexistent"),  # Won't be accessed due to empty tiles
             out_dir=out_dir,
             tiles=[],
@@ -344,11 +343,11 @@ def test_make_tiles_different_max_zoom(test_data_dir, max_zoom):
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_dir = Path(tmp_dir)
 
-        tiles = list(kartapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
+        tiles = list(karttapullautin2tiles.list_tiles(test_data_dir, min_zoom=12))
         if not tiles:
             pytest.skip("No tiles found for testing")
 
-        kartapullautin2tiles.make_tiles(
+        karttapullautin2tiles.make_tiles(
             in_dir=test_data_dir,
             out_dir=out_dir,
             tiles=tiles[:1],  # Use only first tile for faster testing
@@ -361,7 +360,7 @@ def test_make_tiles_different_max_zoom(test_data_dir, max_zoom):
 # Tests for get_html_viewer function
 def test_get_html_viewer_basic():
     """Test HTML viewer generation"""
-    html = kartapullautin2tiles.get_html_viewer(
+    html = karttapullautin2tiles.get_html_viewer(
         lon_center=10.0, lat_center=50.0, default_zoom=12, min_zoom=8, max_zoom=16
     )
 
@@ -377,7 +376,7 @@ def test_get_html_viewer_parameters():
     lon_center, lat_center = -120.5, 35.2
     default_zoom, min_zoom, max_zoom = 10, 5, 18
 
-    html = kartapullautin2tiles.get_html_viewer(
+    html = karttapullautin2tiles.get_html_viewer(
         lon_center=lon_center, lat_center=lat_center, default_zoom=default_zoom, min_zoom=min_zoom, max_zoom=max_zoom
     )
 
@@ -391,10 +390,10 @@ def test_get_html_viewer_parameters():
 # Tests for module constants
 def test_wgs84_crs_constant():
     """Test that WGS84 CRS constant is correct"""
-    assert kartapullautin2tiles.WGS_84_CRS == "EPSG:4326"
+    assert karttapullautin2tiles.WGS_84_CRS == "EPSG:4326"
 
 
 def test_logger_exists():
     """Test that logger is properly configured"""
-    assert hasattr(kartapullautin2tiles, "logger")
-    assert kartapullautin2tiles.logger.name == "kartapullautin2tiles"
+    assert hasattr(karttapullautin2tiles, "logger")
+    assert karttapullautin2tiles.logger.name == "karttapullautin2tiles"

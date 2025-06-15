@@ -3,9 +3,9 @@ build-backend = "hatchling.build"
 requires = [ "hatchling" ]
 
 [project]
-name = "kartapullautin2tiles"
+name = "karttapullautin2tiles"
 version = "0.0.1"
-description = "Convert the output of kartapullautin into web mercator tiles"
+description = "Convert the output of karttapullautin into web mercator tiles"
 readme = "README.md"
 license = { file = "LICENSE" }
 maintainers = [ { name = "Gregor Sturm", email = "gregor@sturmcloud.org" } ]
@@ -53,11 +53,11 @@ optional-dependencies.doc = [
 ]
 optional-dependencies.test = [ "coverage", "pytest" ]
 # https://docs.pypi.org/project_metadata/#project-urls
-urls.Documentation = "https://kartapullautin2tiles.readthedocs.io/"
-urls.Homepage = "https://github.com/grst/kartapullautin2tiles"
-urls.Source = "https://github.com/grst/kartapullautin2tiles"
+urls.Documentation = "https://karttapullautin2tiles.readthedocs.io/"
+urls.Homepage = "https://github.com/grst/karttapullautin2tiles"
+urls.Source = "https://github.com/grst/karttapullautin2tiles"
 
-scripts.k2t = "kartapullautin2tiles.cli:app"
+scripts.k2t = "karttapullautin2tiles.cli:app"
 
 [tool.hatch.envs.default]
 installer = "uv"
@@ -139,7 +139,7 @@ addopts = [
 ]
 
 [tool.coverage.run]
-source = [ "kartapullautin2tiles" ]
+source = [ "karttapullautin2tiles" ]
 omit = [ "**/test_*.py" ]
 
 [tool.cruft]
