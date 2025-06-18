@@ -13,7 +13,7 @@ app = cyclopts.App()
 
 
 @app.command
-def list_tiles(dir: Path, *, proj: str = "EPSG:25832", pattern="*depr*.pgw", zoom: int = 12):
+def list_tiles(dir: Path, *, proj: str, pattern="*depr*.pgw", zoom: int = 12):
     """
     List the tiles that are covered by the karttapullautin output directory at the given zoom level.
 
@@ -42,7 +42,7 @@ def make_tiles(
     out_dir: Path,
     tile_list: Path | None = None,
     *,
-    proj: str = "EPSG:25832",
+    proj: str,
     pattern="*depr*.pgw",
     max_zoom: int = 17,
     include_viewer: bool = True,
@@ -64,13 +64,13 @@ def make_tiles(
 
     .. code-block:: bash
 
-        k2t list-tiles --zoom 12 karttapullautin/out | k2t make-tiles karttapullautin/out karttapullautin/tiles
+        k2t list-tiles --proj EPSG:25832 --zoom 12 karttapullautin/out | k2t make-tiles --proj EPSG:25832 karttapullautin/out karttapullautin/tiles
 
     * To run with 6 processes in parallel using GNU parallel:
 
     .. code-block:: bash
 
-        k2t list-tiles --zoom 12 karttapullautin/out | parallel --pipe -j 6 --block 1 k2t make-tiles karttapullautin/out karttapullautin/tiles
+        k2t list-tiles --proj EPSG:25832 --zoom 12 karttapullautin/out | parallel --pipe -j 6 --block 1 k2t make-tiles --proj EPSG:25832 karttapullautin/out karttapullautin/tiles
 
     Parameters
     ----------
