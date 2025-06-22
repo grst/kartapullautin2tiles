@@ -95,15 +95,19 @@ def load_karttapullautin_dir(dir: Path, *, proj: str | CRS = "EPSG:25832", patte
     return gpd.GeoDataFrame((_load_img(f) for f in files), crs=proj)
 
 
-def _get_tile_bb(tile: mercantile.Tile, crs: str | CRS):
-    """Get rows from the dataframe that overlap with tile"""
-    tile_wgs84_bounds = mercantile.bounds(tile)  # Get the WGS84 bounds of the selected web mercator tile
+def _get_tile_bb_polygon(tile: mercantile.Tile, crs: str | CRS):
+    """Get the polygon that refers to the boundaries of `tile`, transformed to `crs`"""
+    tile_wgs84_bounds = mercantile.bounds(tile)
+    tile_wgs84_polygon = Polygon.from_bounds(*tile_wgs84_bounds)
 
-    # EPSG:4326 = WGS84
-    transformer = pyproj.Transformer.from_crs("EPSG:4326", crs, always_xy=True)
-    minx, miny = transformer.transform(*tile_wgs84_bounds[:2])
-    maxx, maxy = transformer.transform(*tile_wgs84_bounds[2:])
-    return (minx, miny, maxx, maxy)
+    # Transform the polygon to the gpdf CRS
+    transformer = pyproj.Transformer.from_crs(WGS_84_CRS, crs, always_xy=True)
+    transformed_coords = []
+    for x, y in tile_wgs84_polygon.exterior.coords:
+        transformed_x, transformed_y = transformer.transform(x, y)
+        transformed_coords.append((transformed_x, transformed_y))
+
+    return Polygon(transformed_coords)
 
 
 def _subset_array(
@@ -300,8 +304,9 @@ def make_tiles(
     # iterate over min zoom tiles
     for parent_tile in tiles:
         logger.info(f"Working on {parent_tile}")
-        query_polygon = _get_tile_bb(parent_tile, gpdf.crs)
-        tmp_df = gpdf.loc[gpdf.intersects(Polygon.from_bounds(*query_polygon))].reset_index()
+
+        query_polygon = _get_tile_bb_polygon(parent_tile, gpdf.crs)
+        tmp_df = gpdf.loc[gpdf.intersects(query_polygon)].reset_index()
         if not tmp_df.shape[0]:
             logger.info("Empty tile, skipping")
             continue
