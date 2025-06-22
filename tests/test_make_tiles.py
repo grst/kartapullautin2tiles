@@ -2,14 +2,16 @@ import tempfile
 from pathlib import Path
 
 import geopandas as gpd
-import karttapullautin2tiles
 import mercantile
 import numpy as np
 import pytest
 import rasterio
+import rasterio.transform
 from PIL import Image
 from pyproj.crs.crs import CRS
 from shapely.geometry import Polygon
+
+import karttapullautin2tiles
 
 
 def test_package_has_version():
@@ -118,6 +120,7 @@ def test_load_karttapullautin_dir_params(test_data_dir, proj, pattern, expected_
     if isinstance(proj, str):
         assert result.crs == proj
     else:
+        assert result.crs is not None
         assert result.crs.to_epsg() == proj.to_epsg()
 
 
@@ -163,7 +166,7 @@ def test_list_tiles_custom_params(test_data_dir):
     assert all(tile.z == 10 for tile in tiles)
 
 
-# Tests for _get_tile_bb function
+# Tests for _get_tile_bb_polygon function
 @pytest.mark.parametrize(
     "tile_z,tile_x,tile_y,crs",
     [
@@ -173,31 +176,33 @@ def test_list_tiles_custom_params(test_data_dir):
     ],
 )
 def test_get_tile_bb_various_tiles(tile_z, tile_x, tile_y, crs):
-    """Test getting bounding box for various tiles and CRS"""
+    """Test getting bounding box polygon for various tiles and CRS"""
     tile = mercantile.Tile(tile_x, tile_y, tile_z)
 
-    result = karttapullautin2tiles._get_tile_bb(tile, crs)
+    result = karttapullautin2tiles._get_tile_bb_polygon(tile, crs)
 
-    assert len(result) == 4
-    minx, miny, maxx, maxy = result
+    assert isinstance(result, Polygon)
+    bounds = result.bounds
+    minx, miny, maxx, maxy = bounds
     assert minx < maxx
     assert miny < maxy
-    assert all(isinstance(x, float) for x in result)
+    assert all(isinstance(x, float) for x in bounds)
 
 
 def test_get_tile_bb_consistency():
-    """Test that tile bounding box is consistent with mercantile bounds"""
+    """Test that tile bounding box polygon is consistent with mercantile bounds"""
     tile = mercantile.Tile(1000, 600, 12)
     crs = "EPSG:4326"
 
-    result = karttapullautin2tiles._get_tile_bb(tile, crs)
+    result = karttapullautin2tiles._get_tile_bb_polygon(tile, crs)
     original_bounds = mercantile.bounds(tile)
 
     # For EPSG:4326, the bounds should be the same as mercantile.bounds
-    assert result[0] == pytest.approx(original_bounds.west)
-    assert result[1] == pytest.approx(original_bounds.south)
-    assert result[2] == pytest.approx(original_bounds.east)
-    assert result[3] == pytest.approx(original_bounds.north)
+    bounds = result.bounds
+    assert bounds[0] == pytest.approx(original_bounds.west)
+    assert bounds[1] == pytest.approx(original_bounds.south)
+    assert bounds[2] == pytest.approx(original_bounds.east)
+    assert bounds[3] == pytest.approx(original_bounds.north)
 
 
 # Tests for _subset_array function
