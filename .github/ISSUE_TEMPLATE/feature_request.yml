@@ -1,5 +1,5 @@
 name: Feature request
-description: Propose a new feature for kartapullautin2tiles
+description: Propose a new feature for karttapullautin2tiles
 labels: enhancement
 body:
   - type: textarea
