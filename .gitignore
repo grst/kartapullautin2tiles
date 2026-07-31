@@ -22,3 +22,7 @@ __pycache__/
 
 # local testing
 /notebooks
+/testdata
+
+# local development
+.devcontainer
