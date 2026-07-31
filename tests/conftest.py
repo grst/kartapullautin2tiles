@@ -2,11 +2,12 @@ import tempfile
 from pathlib import Path
 
 import geopandas as gpd
-import karttapullautin2tiles
 import numpy as np
 import pytest
 from PIL import Image
 from shapely.geometry import Polygon
+
+import karttapullautin2tiles
 
 
 @pytest.fixture
