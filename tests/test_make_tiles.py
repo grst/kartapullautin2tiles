@@ -295,7 +295,8 @@ def test_extract_and_transform_tile_no_overlap():
 
 
 # Tests for make_tiles function (updated signature)
-def test_make_tiles_basic(test_data_dir):
+@pytest.mark.parametrize(("tile_format", "extension"), [("webp", ".webp"), ("png", ".png")])
+def test_make_tiles_basic(test_data_dir, tile_format, extension):
     """Test basic tile generation with new signature"""
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_dir = Path(tmp_dir)
@@ -305,25 +306,45 @@ def test_make_tiles_basic(test_data_dir):
 
         # Use make_tiles with new signature
         karttapullautin2tiles.make_tiles(
-            in_dir=test_data_dir, out_dir=out_dir, tiles=tiles, proj="EPSG:25832", pattern="*depr*.pgw", max_zoom=14
+            in_dir=test_data_dir,
+            out_dir=out_dir,
+            tiles=tiles,
+            proj="EPSG:25832",
+            pattern="*depr*.pgw",
+            max_zoom=14,
+            tile_format=tile_format,
         )
 
         # Check that some tiles were created
         assert out_dir.exists()
-        zoom_dirs = list(out_dir.glob("*"))
+        zoom_dirs = [d for d in out_dir.glob("*") if d.is_dir()]
         assert len(zoom_dirs) > 0
 
-        # Check directory structure exists (z/x/y.png)
+        # Check directory structure exists (z/x/y.<extension>) and holds only that format
+        tile_files = list(out_dir.glob("*/*/*"))
+        assert tile_files, "no tiles were written"
+        assert all(f.suffix == extension for f in tile_files)
         for zoom_dir in zoom_dirs:
-            if zoom_dir.is_dir():
-                x_dirs = list(zoom_dir.glob("*"))
-                if x_dirs:  # Only check if there are x directories
-                    assert any(x_dir.is_dir() for x_dir in x_dirs)
-                    for x_dir in x_dirs:
-                        if x_dir.is_dir():
-                            png_files = list(x_dir.glob("*.png"))
-                            if png_files:  # Only check if there are PNG files
-                                assert all(f.suffix == ".png" for f in png_files)
+            x_dirs = list(zoom_dir.glob("*"))
+            assert x_dirs
+            assert all(x_dir.is_dir() for x_dir in x_dirs)
+
+
+@pytest.mark.parametrize(
+    ("tile_format", "webp_method"),
+    [("gif", 2), ("webp", 7), ("webp", -1)],
+)
+def test_make_tiles_rejects_invalid_output_format(test_data_dir, tile_format, webp_method):
+    """make_tiles validates its output format arguments up front"""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        with pytest.raises(ValueError):
+            karttapullautin2tiles.make_tiles(
+                in_dir=test_data_dir,
+                out_dir=Path(tmp_dir),
+                tiles=[],
+                tile_format=tile_format,
+                webp_method=webp_method,
+            )
 
 
 def test_make_tiles_empty_tiles_list():
@@ -374,6 +395,7 @@ def test_get_html_viewer_basic():
     assert "10.0" in html  # lon_center should be in HTML
     assert "50.0" in html  # lat_center should be in HTML
     assert "12" in html  # default_zoom should be in HTML
+    assert "{{" not in html  # every placeholder should have been substituted
 
 
 def test_get_html_viewer_parameters():
@@ -390,6 +412,27 @@ def test_get_html_viewer_parameters():
     assert str(default_zoom) in html
     assert str(min_zoom) in html
     assert str(max_zoom) in html
+
+
+@pytest.mark.parametrize(("tile_ext", "other_ext"), [("webp", "png"), ("png", "webp")])
+def test_get_html_viewer_tile_ext(tile_ext, other_ext):
+    """The viewer requests tiles with the extension they were written with"""
+    html = karttapullautin2tiles.get_html_viewer(
+        lon_center=10.0, lat_center=50.0, default_zoom=12, min_zoom=12, max_zoom=17, tile_ext=tile_ext
+    )
+
+    assert f"{{z}}/{{x}}/{{y}}.{tile_ext}" in html
+    assert f"{{z}}/{{x}}/{{y}}.{other_ext}" not in html
+
+
+def test_get_html_viewer_max_zoom_not_negated():
+    """Regression test: the source maxZoom used to be passed negated by the CLI"""
+    html = karttapullautin2tiles.get_html_viewer(
+        lon_center=10.0, lat_center=50.0, default_zoom=12, min_zoom=12, max_zoom=17
+    )
+
+    assert "maxZoom: 17" in html
+    assert "-17" not in html
 
 
 # Tests for module constants
