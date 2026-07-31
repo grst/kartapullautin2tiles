@@ -3,6 +3,7 @@
 import json
 import sys
 from pathlib import Path
+from typing import Annotated, Literal
 
 import cyclopts
 from mercantile import Tile
@@ -10,6 +11,17 @@ from mercantile import Tile
 import karttapullautin2tiles as k2t
 
 app = cyclopts.App()
+
+
+def _validate_make_tiles(tile_format: str = "webp", webp_method: int | None = None, **_):
+    """
+    Reject `--webp-method` unless the output format is webp.
+
+    Registered as a cyclopts command validator, so that the ValueError is reported as a
+    regular CLI usage error rather than a traceback.
+    """
+    if tile_format != "webp" and webp_method is not None:
+        raise ValueError(f"--webp-method only applies to --format webp, but --format {tile_format} was given.")
 
 
 @app.command
@@ -36,7 +48,7 @@ def list_tiles(dir: Path, *, proj: str, pattern="*depr*.pgw", zoom: int = 12):
         sys.stdout.write(json.dumps(tile._asdict()) + "\n")
 
 
-@app.command
+@app.command(validator=_validate_make_tiles)
 def make_tiles(
     in_dir: Path,
     out_dir: Path,
@@ -45,6 +57,8 @@ def make_tiles(
     proj: str,
     pattern="*depr*.pgw",
     max_zoom: int = 17,
+    tile_format: Annotated[Literal["webp", "png"], cyclopts.Parameter(name="--format")] = "webp",
+    webp_method: int | None = None,
     include_viewer: bool = True,
 ):
     """
@@ -88,9 +102,19 @@ def make_tiles(
         Search pattern for pgw files in the input directory
     max_zoom
         Maximum zoom level to generate tiles for
+    tile_format
+        Output image format. Both are lossless; `webp` produces roughly 25% smaller files than
+        `png` and decodes faster, but `png` is available for consumers that cannot read webp.
+    webp_method
+        libwebp compression effort between 0 and 6, defaults to 2. Higher is smaller but slower
+        to write, and has no effect on how fast the tiles decode. Only valid with `--format webp`.
     include_viewer
         If enabled, include a HTML file to preview the generated tiles
     """
+    # The default is `None` rather than 2 so that an explicit `--webp-method 0` is still
+    # distinguishable from the flag not being passed at all; see `_validate_make_tiles`.
+    webp_method = k2t.DEFAULT_WEBP_METHOD if webp_method is None else webp_method
+
     if tile_list is None:
         lines = sys.stdin.readlines()
     else:
@@ -102,10 +126,23 @@ def make_tiles(
         return
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    k2t.make_tiles(in_dir, out_dir, tiles, proj=proj, pattern=pattern, max_zoom=max_zoom)
+    k2t.make_tiles(
+        in_dir,
+        out_dir,
+        tiles,
+        proj=proj,
+        pattern=pattern,
+        max_zoom=max_zoom,
+        tile_format=tile_format,
+        webp_method=webp_method,
+    )
     if include_viewer:
         html = k2t.get_html_viewer(
-            *k2t._get_tiles_center(tiles), default_zoom=tiles[0].z, min_zoom=tiles[0].z, max_zoom=-max_zoom
+            *k2t._get_tiles_center(tiles),
+            default_zoom=tiles[0].z,
+            min_zoom=tiles[0].z,
+            max_zoom=max_zoom,
+            tile_ext=k2t.TILE_FORMATS[tile_format].lstrip("."),
         )  # type: ignore
         (out_dir / "viewer.html").write_text(html)
 

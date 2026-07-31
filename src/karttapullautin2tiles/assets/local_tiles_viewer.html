@@ -59,9 +59,11 @@
         // Create the custom tile layer
         const customTileLayer = new ol.layer.Tile({
             source: new ol.source.XYZ({
-                url: '{z}/{x}/{y}.png',
+                url: '{z}/{x}/{y}.{{tile_ext}}',
                 minZoom: {{min_zoom}},
-                maxZoom: 18,
+                // Highest zoom level that tiles were generated for. The view below allows
+                // zooming in further, which OpenLayers serves by upscaling this level.
+                maxZoom: {{max_zoom}},
                 tileLoadFunction: function(imageTile, src) {
                     // Handle CORS issues for local files
                     imageTile.getImage().src = src;

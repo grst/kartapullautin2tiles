@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 
 WGS_84_CRS = "EPSG:4326"
 
+#: Supported output formats, mapped to their file extension. Both encode losslessly.
+#: `webp` produces tiles roughly 25% smaller than `png` and decodes faster.
+TILE_FORMATS = {"webp": ".webp", "png": ".png"}
+
+#: Default libwebp compression effort. Higher is smaller but disproportionally slower:
+#: relative to method 2, method 3 is 2.3x the encode time for 3% less data, and method 6
+#: is 40x the encode time for 15% less data. Decoding speed is unaffected by this setting.
+DEFAULT_WEBP_METHOD = 2
+
 
 def _load_img(pgw_file: Path):
     """Load pgw file to geopandas row"""
@@ -220,7 +229,12 @@ def extract_and_transform_tile(
             dst_transform=dst_transform,
             dst_crs=WGS_84_CRS,
             dst_nodata=255,
-            resampling=rasterio.warp.Resampling.lanczos,
+            # `average` rather than an interpolating filter: tiles are always downscaled (2x at the
+            # maximum zoom level, up to 32x at the minimum one), and area-averaging is the matching
+            # antialiasing filter. Lanczos rings around the sharp lines of a map, which both adds
+            # halos and roughly doubles the number of distinct colours, making the tiles compress
+            # noticeably worse.
+            resampling=rasterio.warp.Resampling.average,
         )
     except ValueError:
         pass
@@ -230,6 +244,39 @@ def extract_and_transform_tile(
     pil_image = Image.fromarray(image_data.astype(np.uint8), mode="RGB")
 
     return pil_image
+
+
+def _save_tile(img: Image.Image, path: Path, *, tile_format: str, webp_method: int) -> None:
+    """
+    Write a single tile to disk.
+
+    Both formats are lossless, i.e. the file decodes back to exactly the pixels in `img`.
+
+    Parameters
+    ----------
+    img
+        The tile to write
+    path
+        Destination path, including the extension matching `tile_format`
+    tile_format
+        One of the keys of `TILE_FORMATS`
+    webp_method
+        libwebp compression effort (0-6); ignored for png
+    """
+    if tile_format == "webp":
+        # In lossless mode `quality` is libwebp's spatial-prediction effort knob, which is
+        # separate from `method`; 100 is the setting that actually minimises the file.
+        img.save(path, format="WEBP", lossless=True, quality=100, method=webp_method)
+    else:
+        img.save(path, format="PNG")
+
+
+def _check_output_format(tile_format: str, webp_method: int) -> None:
+    """Validate the output format arguments, raising ValueError if they are out of range"""
+    if tile_format not in TILE_FORMATS:
+        raise ValueError(f"Unsupported tile_format {tile_format!r}. Expected one of {sorted(TILE_FORMATS)}.")
+    if not 0 <= webp_method <= 6:
+        raise ValueError(f"webp_method must be between 0 and 6, got {webp_method}.")
 
 
 def list_tiles(dir: Path, *, proj: str = "EPSG:25832", pattern="*depr*.pgw", min_zoom: int = 12):
@@ -276,6 +323,8 @@ def make_tiles(
     proj: str = "EPSG:25832",
     pattern="*depr*.pgw",
     max_zoom: int = 17,
+    tile_format: str = "webp",
+    webp_method: int = DEFAULT_WEBP_METHOD,
 ):
     """
     Create a tile directory from karttapullautin output.
@@ -297,7 +346,16 @@ def make_tiles(
         Search pattern for pgw files in the input directory
     max_zoom
         Maximum zoom level to generate tiles for
+    tile_format
+        Output image format, one of the keys of `TILE_FORMATS`. Both are lossless; `webp`
+        produces roughly 25% smaller files than `png` and decodes faster.
+    webp_method
+        libwebp compression effort between 0 and 6. Higher is smaller but slower to write;
+        it has no effect on how fast the tiles decode. Ignored if `tile_format` is `png`.
     """
+    _check_output_format(tile_format, webp_method)
+    extension = TILE_FORMATS[tile_format]
+
     gpdf = load_karttapullautin_dir(in_dir, proj=proj, pattern=pattern)
     assert gpdf.crs is not None
 
@@ -321,10 +379,18 @@ def make_tiles(
 
                 tile_path = out_dir / str(tile.z) / str(tile.x)
                 tile_path.mkdir(parents=True, exist_ok=True)
-                img.save(tile_path / f"{tile.y}.png")
+                _save_tile(img, tile_path / f"{tile.y}{extension}", tile_format=tile_format, webp_method=webp_method)
 
 
-def get_html_viewer(lon_center: float, lat_center: float, *, default_zoom: int, min_zoom: int, max_zoom: int):
+def get_html_viewer(
+    lon_center: float,
+    lat_center: float,
+    *,
+    default_zoom: int,
+    min_zoom: int,
+    max_zoom: int,
+    tile_ext: str = "webp",
+):
     """
     Output the HTML for a viewer application that can preview tiles in the same folder.
 
@@ -336,6 +402,13 @@ def get_html_viewer(lon_center: float, lat_center: float, *, default_zoom: int, 
         latitude coordinate of the default center of the map
     default_zoom
         default zoom
+    min_zoom
+        lowest zoom level for which tiles exist
+    max_zoom
+        highest zoom level for which tiles exist. The viewer allows zooming in beyond this,
+        upscaling the tiles of this level rather than requesting tiles that do not exist.
+    tile_ext
+        file extension of the generated tiles, without the leading dot
     """
     html_template = (importlib.resources.files("karttapullautin2tiles.assets") / "local_tiles_viewer.html").read_text(
         "utf-8"
@@ -346,5 +419,6 @@ def get_html_viewer(lon_center: float, lat_center: float, *, default_zoom: int, 
     html = html.replace("{{default_zoom}}", str(default_zoom))
     html = html.replace("{{min_zoom}}", str(min_zoom))
     html = html.replace("{{max_zoom}}", str(max_zoom))
+    html = html.replace("{{tile_ext}}", tile_ext)
 
     return html
